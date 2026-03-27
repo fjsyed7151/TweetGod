@@ -1,0 +1,124 @@
+"""Telegram notification sender."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+import httpx
+
+from tweetgod.config import settings
+from tweetgod.models import PostedQuote
+
+log = logging.getLogger(__name__)
+
+
+async def send_message(text: str) -> None:
+    """Send a message to the configured Telegram chat."""
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        log.warning("Telegram not configured, skipping notification")
+        return
+
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    payload = {
+        "chat_id": settings.telegram_chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+    except Exception:
+        log.error("Telegram notification failed", exc_info=True)
+
+
+async def notify_success(quote: PostedQuote, keyword: str, score: float) -> None:
+    """Send a success notification for a posted quote tweet."""
+    source_label = f"\nSource: {quote.source_type}" if quote.source_type != "keyword" else ""
+    quote_url = f"https://x.com/i/status/{quote.quote_tweet_id}" if quote.quote_tweet_id else ""
+    link_line = f"\n\U0001f517 <a href=\"{quote_url}\">View Quote Tweet</a>" if quote_url else ""
+    text = (
+        f"<b>Quote tweet posted</b>\n\n"
+        f"Quoting: @{quote.author_username}\n"
+        f"Original: {quote.tweet_url}\n"
+        f"Quote: <i>{quote.quote_text}</i>\n"
+        f"Keyword: {keyword}\n"
+        f"Score: {score:.2f}{source_label}{link_line}"
+    )
+    await send_message(text)
+
+
+async def notify_failure(error: str, keyword: str) -> None:
+    """Send a failure notification."""
+    text = f"<b>Quote tweet failed</b>\n\nKeyword: {keyword}\nError: {error}"
+    await send_message(text)
+
+
+async def notify_no_tweets(keyword: str, search_type: str) -> None:
+    """Notify when no quality tweets were found."""
+    text = (
+        f"<b>No quality tweets found</b>\n\n"
+        f"Search: {search_type}\n"
+        f"Keyword: {keyword}"
+    )
+    await send_message(text)
+
+
+async def notify_daily_limit() -> None:
+    """Notify when daily limit is reached."""
+    await send_message(f"<b>Daily limit reached</b> ({settings.daily_post_limit} posts)")
+
+
+async def notify_paused(until: datetime) -> None:
+    """Notify that the bot has been paused."""
+    time_str = until.strftime("%I:%M %p %Z")
+    await send_message(f"\u23f8 <b>Paused</b> until {time_str}")
+
+
+async def notify_resumed() -> None:
+    """Notify that the bot has been resumed."""
+    await send_message("\u25b6\ufe0f <b>Resumed!</b> Back to posting.")
+
+
+async def notify_status(paused_until: datetime | None, posts_today: int) -> None:
+    """Send current bot status."""
+    from tweetgod.pause import format_remaining
+    if paused_until:
+        time_str = paused_until.strftime("%I:%M %p %Z")
+        pause_line = f"Status: Paused until {time_str} ({format_remaining()})"
+    else:
+        pause_line = "Status: Active"
+    text = (
+        f"<b>Bot Status</b>\n\n"
+        f"{pause_line}\n"
+        f"Posts today: {posts_today}/{settings.daily_post_limit}"
+    )
+    await send_message(text)
+
+
+async def notify_watchlist_tweet(tweet, matched_keywords: list[str]) -> None:
+    """Send an instant Telegram alert for a Claude Code watchlist tweet."""
+    kw_str = ", ".join(matched_keywords) if matched_keywords else "watchlist account"
+    age_str = f"{tweet.age_hours:.1f}h ago" if tweet.age_hours < 999 else "recent"
+    text = (
+        f"<b>Claude Code Alert</b>\n\n"
+        f"@{tweet.author_username} ({age_str})\n\n"
+        f"<i>{tweet.text[:500]}</i>\n\n"
+        f"Matched: {kw_str}\n"
+        f"<a href=\"{tweet.url}\">View Tweet</a>"
+    )
+    await send_message(text)
+
+
+async def notify_daily_summary(posts_today: int, total_score: float) -> None:
+    """Send an end-of-day summary."""
+    text = (
+        f"<b>Daily summary</b>\n\n"
+        f"Quote tweets posted: {posts_today}\n"
+        f"Total score: {total_score:.2f}\n"
+        f"Avg score: {total_score / max(posts_today, 1):.2f}"
+    )
+    await send_message(text)
