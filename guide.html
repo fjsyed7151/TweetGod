@@ -23,24 +23,28 @@
 <h3>The Four Signals That Mean "Build an App"</h3>
 
 <h4>1. Does it need to run continuously or on a schedule?</h4>
-<p>Claude Code is a session. You open it, do work, close it. If your thing needs to run at 2 AM while you're asleep, or check something every 30 minutes, or stay alive listening for events — that's an app.</p>
-<p><strong>TweetGod example:</strong> The bot runs every 25-55 minutes during active hours, checks engagement every 6 hours, and listens for Telegram commands 24/7. You can't prompt Claude Code to do that.</p>
+<p>Claude Code is a session. You open it, do work, close it. If your thing needs to run at 2 AM while you're asleep, or check something every 30 minutes, or stay alive indefinitely — that's an app. Claude Code can't be a daemon. It can't sit there running a scheduler 24/7.</p>
+<p><strong>TweetGod example:</strong> The bot runs every 25-55 minutes during active hours, checks engagement every 6 hours, and stays alive listening for Telegram commands around the clock. You can't prompt Claude Code to do that.</p>
+<p><strong>Other examples:</strong> A price drop monitor that checks Amazon every hour. A daily report generator that fires at 6 AM. A Slack bot that's always listening.</p>
 <p><strong>Claude Code territory:</strong> "Analyze this CSV and give me a summary." "Refactor this function." "Write tests for this module." All one-shot tasks with a clear start and end.</p>
 
-<h4>2. Does it need to maintain state across sessions?</h4>
-<p>Claude Code's memory resets between conversations (aside from memory files, which are lightweight). If your system needs to remember what it's already done, track performance over time, or build up a dataset — you need a database, which means you need an app.</p>
-<p><strong>TweetGod example:</strong> The bot tracks every tweet it's replied to (deduplication), keyword performance over weeks (feedback loop), and engagement metrics (self-improvement). That's a Supabase database with 4 tables that persist across thousands of runs.</p>
-<p><strong>Claude Code territory:</strong> "Read this file and fix the bug." "What changed in the last 5 commits?" These don't need to remember anything between sessions.</p>
+<h4>2. Do other people need to use it?</h4>
+<p>Claude Code is single-player. You're the operator — you start sessions, you see results, you're the only one interacting with it. The moment someone else needs to interact with your thing — a client checking a dashboard, a teammate approving requests, a customer using a tool — you need a deployed app. There's no way to give someone else access to your Claude Code session.</p>
+<p><strong>TweetGod example:</strong> The analytics dashboard is a web app on Vercel that anyone with the URL can view. If you wanted a second person reviewing tweets or a client checking their engagement stats, that has to be a deployed web app.</p>
+<p><strong>Other examples:</strong> A client portal. A tool your team shares. Any product with users other than you.</p>
+<p><strong>Claude Code territory:</strong> Anything only you interact with — personal scripts, analysis, code generation, research. If you're the only user, Claude Code sessions might be enough.</p>
 
-<h4>3. Does it integrate with multiple external APIs continuously?</h4>
-<p>Claude Code can make API calls in a single session, sure. But if your system needs to <strong>continuously orchestrate</strong> multiple services — scraping from one, processing with another, posting to a third, tracking with a fourth — that's app territory.</p>
-<p><strong>TweetGod example:</strong> Every single pipeline run touches 5 services: Apify (scraping), Supabase (database), xAI Grok (LLM polish), Telegram (approval), and Twitter (posting). These need to work together in a specific sequence, handle failures gracefully, and retry when things break.</p>
-<p><strong>Claude Code territory:</strong> "Call this API and format the response." One-off integrations or exploration.</p>
+<h4>3. Does it need to respond to external events in real time?</h4>
+<p>Claude Code can call out to the world, but the world can't call in to Claude Code. If something external needs to trigger your system — a webhook fires, a user submits a form, a payment comes through, someone sends a Telegram message — something needs to be <strong>listening right now</strong> to catch that event the moment it happens. Claude Code isn't sitting there waiting for incoming requests.</p>
+<p><strong>TweetGod example:</strong> The Telegram listener polls every 3 seconds for your response. When you type "1" to approve a tweet, something has to be alive to receive that message immediately. That's a persistent process, not a Claude Code session.</p>
+<p><strong>Other examples:</strong> A Stripe webhook receiver that processes payments. A chatbot that responds to users in real time. A GitHub bot that comments on PRs when they're opened.</p>
+<p><strong>Claude Code territory:</strong> Calling APIs on your schedule — "fetch this data", "post this thing", "check this endpoint." Outbound calls are fine. It's inbound events that require an app.</p>
 
-<h4>4. Does it involve a feedback loop?</h4>
-<p>If your system needs to learn from its own output — track what worked, adjust strategy, and improve over time — that's inherently stateful and continuous. App territory.</p>
-<p><strong>TweetGod example:</strong> Every 6 hours, the engagement tracker checks how posted tweets performed. Keywords that produce high-engagement replies get selected more often in future runs. The system literally gets smarter over time. You cannot build a self-improving loop in a Claude Code session.</p>
-<p><strong>Claude Code territory:</strong> "Analyze these results and suggest improvements." You can use Claude Code to <em>inform</em> your decisions, but the loop itself (act → measure → adjust → repeat) requires persistent infrastructure.</p>
+<h4>4. Does it need to maintain state across thousands of runs?</h4>
+<p>Claude Code has memory files, and they work for lightweight persistence. But if your system needs to track thousands of records, query historical data, or maintain complex relational state across months of operation — you need a real database, which means you need an app.</p>
+<p><strong>TweetGod example:</strong> The bot has replied to hundreds of tweets, tracked keyword performance across thousands of runs, and stored every approval decision with timestamps and response times. That's 4 Supabase tables with relational data. Memory files can't do that.</p>
+<p><strong>Other examples:</strong> A CRM tracking hundreds of leads and interactions. An analytics system aggregating months of data. Anything where you'd say "let me query the data from last month."</p>
+<p><strong>Claude Code territory:</strong> Remembering preferences, recent context, a short list of items. If your state fits in a markdown file, Claude Code memory is fine. If you need SQL queries, you need a database.</p>
 
 <h3>The Hybrid Approach (What I Actually Do)</h3>
 <p>Here's what most people miss: <strong>I used Claude Code to build TweetGod.</strong> It's not either/or. The workflow is:</p>
@@ -55,20 +59,20 @@
 <h3>Quick Reference</h3>
 <table>
   <thead>
-    <tr><th>Use Case</th><th>Claude Code</th><th>App</th></tr>
+    <tr><th>Use Case</th><th>Claude Code</th><th>App</th><th>Why</th></tr>
   </thead>
   <tbody>
-    <tr><td>One-time analysis or transformation</td><td>X</td><td></td></tr>
-    <tr><td>Refactoring or code review</td><td>X</td><td></td></tr>
-    <tr><td>Exploring a new API</td><td>X</td><td></td></tr>
-    <tr><td>Scheduled data processing</td><td></td><td>X</td></tr>
-    <tr><td>Monitoring + alerting</td><td></td><td>X</td></tr>
-    <tr><td>Social media automation</td><td></td><td>X</td></tr>
-    <tr><td>Self-improving system</td><td></td><td>X</td></tr>
-    <tr><td>Dashboard with live data</td><td></td><td>X</td></tr>
-    <tr><td>Chatbot or interactive tool</td><td></td><td>X</td></tr>
-    <tr><td>Writing a script you'll run once</td><td>X</td><td></td></tr>
-    <tr><td>Writing a script you'll run daily</td><td></td><td>X</td></tr>
+    <tr><td>One-time analysis or transformation</td><td>X</td><td></td><td>One-shot, just you</td></tr>
+    <tr><td>Refactoring or code review</td><td>X</td><td></td><td>One-shot, just you</td></tr>
+    <tr><td>Exploring or calling an API</td><td>X</td><td></td><td>Outbound calls, no persistence needed</td></tr>
+    <tr><td>Writing a script you'll run once</td><td>X</td><td></td><td>No schedule, no other users</td></tr>
+    <tr><td>Scheduled data processing</td><td></td><td>X</td><td>Runs on a schedule without you</td></tr>
+    <tr><td>Monitoring + alerting</td><td></td><td>X</td><td>Runs continuously, responds to events</td></tr>
+    <tr><td>Social media automation</td><td></td><td>X</td><td>Scheduled, event-driven, needs state</td></tr>
+    <tr><td>Dashboard or client portal</td><td></td><td>X</td><td>Other people need to access it</td></tr>
+    <tr><td>Chatbot or interactive tool</td><td></td><td>X</td><td>Responds to external events in real time</td></tr>
+    <tr><td>Webhook receiver (Stripe, GitHub, etc.)</td><td></td><td>X</td><td>World calls in — needs to be listening</td></tr>
+    <tr><td>CRM or data system with history</td><td></td><td>X</td><td>Thousands of records, needs a real database</td></tr>
   </tbody>
 </table>
 
