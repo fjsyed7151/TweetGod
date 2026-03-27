@@ -1,0 +1,565 @@
+<h1>TweetGod: Deep Dive Guide</h1>
+<p><strong>A masterclass on when to build an app vs. use Claude Code directly, why TweetGod was built the way it was, and how to set up your own version from scratch.</strong></p>
+<p>By Chase (chaseai.io)</p>
+
+<hr>
+
+<h2>Table of Contents</h2>
+<ol>
+  <li>The Decision Matrix: Claude Code vs. Building an App</li>
+  <li>Why TweetGod Was Built This Way</li>
+  <li>Architecture Breakdown</li>
+  <li>Step-by-Step Setup Guide</li>
+</ol>
+
+<hr>
+
+<h2>Part 1: The Decision Matrix</h2>
+
+<h3>The Core Question</h3>
+<p>"Should I just use Claude Code for this, or should I build an actual application?"</p>
+<p>This is the most common question I get, and the answer comes down to four factors. If your project hits <strong>any</strong> of these, you need an app. If it hits none, Claude Code alone is probably the right call.</p>
+
+<h3>The Four Signals That Mean "Build an App"</h3>
+
+<h4>1. Does it need to run continuously or on a schedule?</h4>
+<p>Claude Code is a session. You open it, do work, close it. If your thing needs to run at 2 AM while you're asleep, or check something every 30 minutes, or stay alive listening for events — that's an app.</p>
+<p><strong>TweetGod example:</strong> The bot runs every 25-55 minutes during active hours, checks engagement every 6 hours, and listens for Telegram commands 24/7. You can't prompt Claude Code to do that.</p>
+<p><strong>Claude Code territory:</strong> "Analyze this CSV and give me a summary." "Refactor this function." "Write tests for this module." All one-shot tasks with a clear start and end.</p>
+
+<h4>2. Does it need to maintain state across sessions?</h4>
+<p>Claude Code's memory resets between conversations (aside from memory files, which are lightweight). If your system needs to remember what it's already done, track performance over time, or build up a dataset — you need a database, which means you need an app.</p>
+<p><strong>TweetGod example:</strong> The bot tracks every tweet it's replied to (deduplication), keyword performance over weeks (feedback loop), and engagement metrics (self-improvement). That's a Supabase database with 4 tables that persist across thousands of runs.</p>
+<p><strong>Claude Code territory:</strong> "Read this file and fix the bug." "What changed in the last 5 commits?" These don't need to remember anything between sessions.</p>
+
+<h4>3. Does it integrate with multiple external APIs continuously?</h4>
+<p>Claude Code can make API calls in a single session, sure. But if your system needs to <strong>continuously orchestrate</strong> multiple services — scraping from one, processing with another, posting to a third, tracking with a fourth — that's app territory.</p>
+<p><strong>TweetGod example:</strong> Every single pipeline run touches 5 services: Apify (scraping), Supabase (database), xAI Grok (LLM polish), Telegram (approval), and Twitter (posting). These need to work together in a specific sequence, handle failures gracefully, and retry when things break.</p>
+<p><strong>Claude Code territory:</strong> "Call this API and format the response." One-off integrations or exploration.</p>
+
+<h4>4. Does it involve a feedback loop?</h4>
+<p>If your system needs to learn from its own output — track what worked, adjust strategy, and improve over time — that's inherently stateful and continuous. App territory.</p>
+<p><strong>TweetGod example:</strong> Every 6 hours, the engagement tracker checks how posted tweets performed. Keywords that produce high-engagement replies get selected more often in future runs. The system literally gets smarter over time. You cannot build a self-improving loop in a Claude Code session.</p>
+<p><strong>Claude Code territory:</strong> "Analyze these results and suggest improvements." You can use Claude Code to <em>inform</em> your decisions, but the loop itself (act → measure → adjust → repeat) requires persistent infrastructure.</p>
+
+<h3>The Hybrid Approach (What I Actually Do)</h3>
+<p>Here's what most people miss: <strong>I used Claude Code to build TweetGod.</strong> It's not either/or. The workflow is:</p>
+<ol>
+  <li><strong>Design with Claude Code</strong> — Talk through the architecture, get the plan right</li>
+  <li><strong>Build with Claude Code</strong> — Write every module, test, and config file</li>
+  <li><strong>Deploy the app</strong> — Push to Railway/Vercel so it runs independently</li>
+  <li><strong>Iterate with Claude Code</strong> — When I need changes, I open Claude Code and modify the codebase</li>
+</ol>
+<p>Claude Code is the <em>builder</em>. The app is the <em>product</em>. You use one to create the other.</p>
+
+<h3>Quick Reference</h3>
+<table>
+  <thead>
+    <tr><th>Use Case</th><th>Claude Code</th><th>App</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>One-time analysis or transformation</td><td>X</td><td></td></tr>
+    <tr><td>Refactoring or code review</td><td>X</td><td></td></tr>
+    <tr><td>Exploring a new API</td><td>X</td><td></td></tr>
+    <tr><td>Scheduled data processing</td><td></td><td>X</td></tr>
+    <tr><td>Monitoring + alerting</td><td></td><td>X</td></tr>
+    <tr><td>Social media automation</td><td></td><td>X</td></tr>
+    <tr><td>Self-improving system</td><td></td><td>X</td></tr>
+    <tr><td>Dashboard with live data</td><td></td><td>X</td></tr>
+    <tr><td>Chatbot or interactive tool</td><td></td><td>X</td></tr>
+    <tr><td>Writing a script you'll run once</td><td>X</td><td></td></tr>
+    <tr><td>Writing a script you'll run daily</td><td></td><td>X</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Part 2: Why TweetGod Was Built This Way</h2>
+
+<h3>Why Quote Tweets Instead of Replies?</h3>
+<p>Early versions of TweetGod posted regular replies. The problem: replies are buried in threads. Quote tweets show up on <em>your</em> timeline, so your followers see them. They also show up as a notification for the original poster that carries more weight than a reply. Quote tweets are a growth mechanism; replies are engagement.</p>
+
+<h3>Why Human-in-the-Loop Instead of Full Auto?</h3>
+<p>We tried fully automated replies first. The problem isn't quality — Grok can write decent tweets. The problem is <strong>judgment</strong>. The bot can't know:</p>
+<ul>
+  <li>"This person is having a bad day, don't be contrarian here"</li>
+  <li>"This is a sarcastic tweet, don't take it literally"</li>
+  <li>"This is actually a dumb take, I shouldn't amplify it"</li>
+  <li>"I actually disagree with the popular opinion here, let me say something real"</li>
+</ul>
+<p>The current flow: the bot finds the opportunity, I provide my actual take (stream of consciousness, typos and all), Grok cleans it up, and I approve the final version. My voice, my judgment, AI efficiency. Best of both worlds.</p>
+
+<h3>Why Grok Instead of Claude for the LLM?</h3>
+<p>Grok is used specifically for tweet polishing because:</p>
+<ol>
+  <li><strong>Speed</strong> — <code>grok-4-1-fast-non-reasoning</code> is extremely fast, which matters when you're in a Telegram approval flow and waiting for the polish</li>
+  <li><strong>Twitter-native context</strong> — Grok is trained on Twitter data and understands tweet conventions</li>
+  <li><strong>Cost</strong> — The polishing task is simple (fix typos, tighten phrasing). Using a frontier model like Opus for this would be overkill</li>
+</ol>
+<p>Claude is the better model for complex reasoning. But "clean up this 200-character tweet" isn't complex reasoning.</p>
+
+<h3>Why Apify Instead of the Twitter API for Scraping?</h3>
+<p>Twitter's API (v2) is deliberately limited on the free tier. You get 500 posts/month for writing and very limited read access. Apify's tweet scraper handles:</p>
+<ul>
+  <li>Search queries with boolean operators (<code>from:user1 OR from:user2</code>)</li>
+  <li>Rate limit management</li>
+  <li>Parsing inconsistent Twitter data formats</li>
+  <li>Much higher volume than the official API allows</li>
+</ul>
+<p>The tradeoff is cost (~$5-10/month on Apify) and slightly more latency. Worth it for the volume and flexibility.</p>
+
+<h3>Why Supabase Instead of a Local Database?</h3>
+<p>Three reasons:</p>
+<ol>
+  <li><strong>Hosted</strong> — No database to manage or back up. It just runs.</li>
+  <li><strong>Dashboard access</strong> — The Next.js dashboard queries Supabase directly. No backend API needed.</li>
+  <li><strong>Free tier</strong> — The free plan handles TweetGod's volume easily (hundreds of rows, not millions).</li>
+</ol>
+<p>SQLite would have worked locally but wouldn't let the dashboard access data without building a separate API layer.</p>
+
+<h3>Why Railway for the Bot?</h3>
+<p>The bot is a <strong>long-running Python process</strong>. It starts up, runs a scheduler, and stays alive indefinitely. This rules out serverless platforms:</p>
+<ul>
+  <li><strong>Vercel</strong> — Serverless. Functions timeout after 10-60 seconds. Can't run a persistent scheduler.</li>
+  <li><strong>AWS Lambda</strong> — Same problem. Max 15-minute execution. You'd need to architect around it with EventBridge + Step Functions. Way more complexity.</li>
+  <li><strong>Heroku</strong> — Would work but costs more than Railway and has a worse developer experience.</li>
+  <li><strong>Railway</strong> — $5/month, connects to your GitHub repo, auto-deploys on push, runs a persistent worker process. Perfect fit.</li>
+</ul>
+<p>The key insight: <strong>serverless is for request/response workloads. Long-running workers need a container platform.</strong> Railway, Render, and Fly.io all work here. Vercel, Netlify, and Lambda don't.</p>
+
+<h3>Why Vercel for the Dashboard?</h3>
+<p>The dashboard <em>is</em> a request/response workload. Someone loads a page, it queries Supabase, renders the data. That's exactly what Vercel is built for. It also has first-class Next.js support (they created it), free SSL, global CDN, and zero config deploys.</p>
+
+<h3>Why Telegram for Approval Instead of a Web UI?</h3>
+<p>Speed. When a tweet opportunity comes in, I need to respond fast (the tweet is losing freshness every minute). Telegram gives me:</p>
+<ul>
+  <li>Push notifications on my phone</li>
+  <li>Instant response from anywhere</li>
+  <li>Simple text interface (no buttons to click, no pages to load)</li>
+  <li>Commands built in (<code>/pause</code>, <code>/resume</code>, <code>/status</code>)</li>
+</ul>
+<p>A web dashboard would require me to have a browser open, watching for new opportunities. Telegram lets me respond from the gym, from a meeting, from bed.</p>
+
+<h3>Why Randomized Intervals Instead of Fixed Schedule?</h3>
+<p>Two reasons:</p>
+<ol>
+  <li><strong>Anti-detection</strong> — Twitter flags bot-like behavior. Posting at exactly 30-minute intervals is a signal. Random jitter between 25-55 minutes looks human.</li>
+  <li><strong>Natural distribution</strong> — Real people don't tweet on a fixed schedule. The randomization creates a more natural posting pattern.</li>
+</ol>
+
+<h3>Why Softmax Selection Instead of Always Picking the Best Tweet?</h3>
+<p>If you always pick the highest-scored tweet, you become predictable. You'd always reply to the biggest accounts, always chase the most viral tweets. Softmax with temperature 0.5 means:</p>
+<ul>
+  <li>The best tweet gets picked <em>most</em> of the time</li>
+  <li>But sometimes #2 or #3 gets picked</li>
+  <li>This creates variety in your timeline</li>
+  <li>You discover engagement opportunities you'd otherwise miss</li>
+</ul>
+<p>It's the same explore/exploit tradeoff that makes the keyword selector work.</p>
+
+<hr>
+
+<h2>Part 3: Architecture Breakdown</h2>
+
+<h3>The Pipeline (What Happens Every 25-55 Minutes)</h3>
+<p>The pipeline runs through these steps in order:</p>
+<ol>
+  <li><strong>Select Mode</strong> — Priority accounts (55%), Trending (30%), Community (5%), or Keywords (10%)</li>
+  <li><strong>Scrape Tweets</strong> — Apify fetches 40-90 tweets matching the search</li>
+  <li><strong>Filter</strong> — Quality gates, deduplication, author diversity limits</li>
+  <li><strong>Score &amp; Rank</strong> — 5-signal composite score, top 5 pool</li>
+  <li><strong>Softmax Pick</strong> — Probabilistic selection from the top 5</li>
+  <li><strong>Telegram Approval</strong> — You type your take, Grok polishes, you approve</li>
+  <li><strong>Post &amp; Track</strong> — Quote tweet posted, saved to database, notification sent</li>
+</ol>
+
+<h3>Module Map</h3>
+<table>
+  <thead>
+    <tr><th>File</th><th>Purpose</th><th>Why It's Separate</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>main.py</code></td><td>Pipeline orchestrator + scheduler</td><td>Entry point, coordinates everything</td></tr>
+    <tr><td><code>config.py</code></td><td>All settings, keywords, account lists</td><td>Single source of truth for tuning</td></tr>
+    <tr><td><code>scraper.py</code></td><td>Apify integration</td><td>Isolates the scraping API — easy to swap</td></tr>
+    <tr><td><code>scorer.py</code></td><td>5-signal scoring algorithm</td><td>Pure math, no side effects, fully testable</td></tr>
+    <tr><td><code>filters.py</code></td><td>Quality gates (3 modes)</td><td>Business rules separated from scoring</td></tr>
+    <tr><td><code>selector.py</code></td><td>UCB1 keyword selection</td><td>Exploration/exploitation logic</td></tr>
+    <tr><td><code>llm.py</code></td><td>Grok polish integration</td><td>LLM calls isolated — swap models easily</td></tr>
+    <tr><td><code>approval.py</code></td><td>Telegram approval flow</td><td>Complex state machine, deserves its own file</td></tr>
+    <tr><td><code>poster.py</code></td><td>Twitter posting via tweepy</td><td>Thin wrapper around the Twitter API</td></tr>
+    <tr><td><code>dedup.py</code></td><td>Supabase read/write operations</td><td>All database logic in one place</td></tr>
+    <tr><td><code>engagement_tracker.py</code></td><td>6-hour feedback loop</td><td>Checks past performance, updates stats</td></tr>
+    <tr><td><code>notifier.py</code></td><td>Telegram notifications</td><td>All outbound messages</td></tr>
+    <tr><td><code>pause.py</code></td><td>Pause/resume/status commands</td><td>Bot control flow</td></tr>
+    <tr><td><code>models.py</code></td><td>Pydantic data models</td><td>Shared types across all modules</td></tr>
+  </tbody>
+</table>
+
+<h3>The Scoring System</h3>
+<p>Each tweet gets a composite score from 5 weighted signals:</p>
+<p><strong>Velocity (35-55%)</strong> — How fast is this tweet gaining engagement? A tweet with 100 likes in 30 minutes is more valuable than 100 likes in 6 hours. Calculated as <code>(likes + retweets) / age_hours</code>, then log-scaled.</p>
+<p><strong>Authority (20-30%)</strong> — How many followers does the author have? Replies to big accounts get more visibility. Log10-scaled so it doesn't overwhelm other signals (1K followers = 3, 100K = 5, 1M = 6).</p>
+<p><strong>Timing (10-20%)</strong> — How fresh is the tweet? Exponential decay with a 2-hour half-life. A tweet posted 1 hour ago scores ~7. A tweet posted 4 hours ago scores ~2.5. You want to be early.</p>
+<p><strong>Opportunity (5-10%)</strong> — Reply gap. Tweets with lots of likes but few replies are underserved. Your reply has more room to be seen. High likes + low replies = high opportunity.</p>
+<p><strong>Replyability (0-15%)</strong> — Placeholder for LLM pre-screening. Not yet implemented — would rate how "reply-able" a tweet is before you spend time on it.</p>
+<p><strong>Bonuses:</strong></p>
+<ul>
+  <li>+30% for questions/discussion tweets (they invite replies)</li>
+  <li>+25% for viral ratio (retweets/followers &gt; 2.16)</li>
+  <li>+20% for priority accounts</li>
+</ul>
+<p>The weights shift based on mode. Trending mode cranks velocity to 55% because you're hunting virality. Standard mode is more balanced.</p>
+
+<h3>The Feedback Loop</h3>
+<p>This is inspired by the UCB1 (Upper Confidence Bound) multi-armed bandit algorithm. It balances:</p>
+<ul>
+  <li><strong>Exploitation</strong> — Use keywords that have historically performed well</li>
+  <li><strong>Exploration</strong> — Try under-used keywords in case they're secretly great</li>
+</ul>
+<p>After posting a quote tweet, the system waits 20-28 hours then checks engagement via the Twitter API. If likes/impressions &gt;= 0.5%, it's a success. The keyword stats get updated, and future runs favor keywords with higher success rates. Keywords with few attempts get an exploration bonus (they might be hidden gems). Recently used keywords get a small penalty to encourage variety.</p>
+
+<h3>The Telegram Approval Flow</h3>
+<p>Here's what the actual flow looks like:</p>
+<ol>
+  <li>Bot finds a tweet opportunity and sends you a Telegram message with: author, follower count, tweet text, likes, RTs, age, score, source type, and a direct link to view the tweet</li>
+  <li>You type your raw take (stream of consciousness, typos and all) — or "5" to skip</li>
+  <li>Grok polishes your text (fixes typos, tightens phrasing, preserves your voice)</li>
+  <li>You see the polished version and choose: "1" to post, type edits for another pass, or "5" to skip</li>
+  <li>If approved, the quote tweet goes live and you get a confirmation with a link</li>
+</ol>
+
+<hr>
+
+<h2>Part 4: Step-by-Step Setup Guide</h2>
+
+<h3>What You'll Need</h3>
+<ul>
+  <li><strong>Claude Code</strong> (you already have this — it's going to do most of the heavy lifting)</li>
+  <li><strong>Python 3.12+</strong> installed on your machine</li>
+  <li><strong>Node.js 18+</strong> (only if you want the optional analytics dashboard)</li>
+  <li>About 30-45 minutes for the initial setup</li>
+  <li>Free accounts on 6 services: Twitter/X, Apify, xAI, Supabase, Telegram, and Railway</li>
+</ul>
+
+<h3>Overview</h3>
+<p>Here's the game plan: you're going to clone a ready-to-go template repo, sign up for 6 services and grab your API keys, then tell Claude Code to wire everything together and customize it for your niche. You don't need to understand the code — Claude Code does. Your job is to get the API keys and tell Claude Code what niche you're in.</p>
+
+<hr>
+
+<h3>Step 1: Clone the Repo and Open Claude Code</h3>
+<p>Open your terminal and run:</p>
+<pre><code>git clone https://github.com/cth9191/TweetGod-template.git
+cd TweetGod-template</code></pre>
+<p>This gives you the full TweetGod codebase with placeholder config ready to customize. Now open Claude Code inside that directory:</p>
+<pre><code>claude</code></pre>
+<p>Claude Code is now your co-pilot for the rest of this setup. Keep it open — you'll be pasting API keys into it and asking it to configure things for you.</p>
+
+<hr>
+
+<h3>Step 2: Sign Up for Your 6 Services</h3>
+<p>Before we configure anything, let's get all the API keys in one go. Open these in separate browser tabs and sign up for each one. You'll need a free account on all of them.</p>
+
+<h4>2a. Twitter/X Developer Account</h4>
+<p>This gives you the API keys to read tweets and post quote tweets.</p>
+<ol>
+  <li>Go to <strong>https://developer.x.com/en/portal/dashboard</strong></li>
+  <li>Sign up for a free developer account if you don't have one</li>
+  <li>Create a new Project and App</li>
+  <li><strong>Important:</strong> Set your app permissions to <strong>"Read and Write"</strong> (not just Read — this is the #1 mistake people make)</li>
+  <li>Go to "Keys and Tokens" and generate all of these:
+    <ul>
+      <li>API Key</li>
+      <li>API Key Secret</li>
+      <li>Access Token</li>
+      <li>Access Token Secret</li>
+      <li>Bearer Token</li>
+    </ul>
+  </li>
+</ol>
+<p>Save all 5 values somewhere (a text file, notes app, whatever). You'll paste them into Claude Code in a minute.</p>
+<p><strong>Free tier limits:</strong> 500 posts/month (roughly 16/day). TweetGod defaults to 12/day to stay safely under this.</p>
+
+<h4>2b. Apify (Tweet Scraping)</h4>
+<p>Apify is what actually searches Twitter for tweets. It handles rate limits and parsing so you don't have to.</p>
+<ol>
+  <li>Go to <strong>https://console.apify.com/</strong> and create an account</li>
+  <li>Go to Account → Integrations → API Tokens</li>
+  <li>Create a new token and save it</li>
+</ol>
+<p><strong>Cost:</strong> Free tier gives you some usage. For regular use, expect ~$5-10/month.</p>
+
+<h4>2c. xAI / Grok (LLM for polishing tweets)</h4>
+<p>Grok takes your raw stream-of-consciousness take and cleans it up — fixes typos, tightens phrasing, keeps your voice. It doesn't write for you, it just polishes.</p>
+<ol>
+  <li>Go to <strong>https://console.x.ai/</strong></li>
+  <li>Create an account and generate an API key</li>
+  <li>Save the key</li>
+</ol>
+<p><strong>Cost:</strong> Well under $1/month for tweet polishing.</p>
+
+<h4>2d. Supabase (Database)</h4>
+<p>Supabase stores everything: which tweets you've replied to, how each keyword performs, your full approval history. It's also what the optional dashboard reads from.</p>
+<ol>
+  <li>Go to <strong>https://supabase.com</strong> and create a free account</li>
+  <li>Create a new project (pick any region close to you, set a database password)</li>
+  <li>Wait for it to provision (~30 seconds)</li>
+  <li>Now create the tables — go to <strong>SQL Editor</strong> in the left sidebar, click "New Query", open the <code>setup.sql</code> file from the repo you cloned, paste the entire contents, and click <strong>Run</strong></li>
+</ol>
+<p>Now grab your credentials:</p>
+<ol>
+  <li>Go to <strong>Settings → API</strong> in the left sidebar</li>
+  <li>Save the <strong>Project URL</strong> (looks like <code>https://abc123.supabase.co</code>)</li>
+  <li>Save the <strong>service_role key</strong> (under "Project API keys" — it's the longer one labeled "service_role", NOT the anon key)</li>
+</ol>
+<p><strong>The service_role key has full database access. Never share it publicly or commit it to git.</strong></p>
+
+<h4>2e. Telegram Bot (Approval Flow)</h4>
+<p>Telegram is how the bot talks to you. It sends you tweet opportunities on your phone, you type your take, and it posts after you approve.</p>
+<p><strong>Create the bot:</strong></p>
+<ol>
+  <li>Open Telegram and search for <code>@BotFather</code></li>
+  <li>Send <code>/newbot</code></li>
+  <li>Choose a name (e.g., "My TweetGod") and username (e.g., <code>my_tweetgod_bot</code>)</li>
+  <li>BotFather gives you a token — save it</li>
+</ol>
+<p><strong>Get your chat ID:</strong></p>
+<ol>
+  <li>Send any message to your new bot (just say "hi")</li>
+  <li>Open this URL in your browser (replace YOUR_TOKEN with the actual token):<br><code>https://api.telegram.org/botYOUR_TOKEN/getUpdates</code></li>
+  <li>In the JSON response, find <code>"chat":{"id":123456789}</code> — that number is your chat ID. Save it.</li>
+</ol>
+
+<h4>2f. Railway (Bot Hosting)</h4>
+<p>Railway is where your bot runs 24/7 in the cloud. You don't deploy yet — just create the account now so it's ready.</p>
+<ol>
+  <li>Go to <strong>https://railway.app</strong> and sign up (GitHub login is easiest)</li>
+</ol>
+<p><strong>Cost:</strong> $5/month Hobby plan. TweetGod uses ~$2-3/month in compute.</p>
+
+<hr>
+
+<h3>Step 3: Give Claude Code Your API Keys</h3>
+<p>You should now have API keys/tokens from all 6 services saved somewhere. Time to wire them up. Go back to Claude Code (which should still be open in your TweetGod-template directory) and say:</p>
+<blockquote>"Create a .env file from .env.example. Here are my values:" </blockquote>
+<p>Then paste in your keys:</p>
+<pre><code>TWITTER_API_KEY=your_key_here
+TWITTER_API_SECRET=your_secret_here
+TWITTER_ACCESS_TOKEN=your_token_here
+TWITTER_ACCESS_TOKEN_SECRET=your_token_secret_here
+TWITTER_BEARER_TOKEN=your_bearer_token_here
+XAI_API_KEY=your_xai_key_here
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_service_role_key_here
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+APIFY_API_TOKEN=your_apify_token_here</code></pre>
+<p>Claude Code will create the <code>.env</code> file with your values. This file is gitignored — it never gets committed or shared.</p>
+
+<hr>
+
+<h3>Step 4: Tell Claude Code Your Niche</h3>
+<p>This is the fun part. The template has placeholder config — now you tell Claude Code who you are and what space you're in, and it fills everything in for you.</p>
+<p>Say something like this to Claude Code:</p>
+<blockquote>"I'm a [your role] in the [your niche] space. My Twitter handle is @[your handle]. Open config.py and do the following:
+<br><br>
+1. Update PERSONA with my name, bio, and how I write (I'm [casual/direct/technical/funny/etc])
+<br>
+2. Replace KEYWORDS with 20-30 search terms relevant to [your niche]
+<br>
+3. Replace PRIORITY_ACCOUNTS with the top 30-40 Twitter accounts in [your niche] — mix of big accounts (500K+), mid-tier builders (10K-100K), and official brand accounts
+<br>
+4. Replace TRENDING_KEYWORDS with 10-15 broad trending terms for [your niche]
+<br>
+5. Set my timezone to [your timezone]
+<br>
+6. Set active hours to [your preferred hours]"</blockquote>
+<p><strong>Example if you're a fitness coach:</strong></p>
+<blockquote>"I'm a fitness coach and online trainer. My Twitter handle is @FitCoachMike. Open config.py and update PERSONA with my info — I write casually, very direct, no fluff. Replace KEYWORDS with fitness keywords like 'home workout', 'protein intake', 'progressive overload', 'creatine', 'calorie deficit', etc. Replace PRIORITY_ACCOUNTS with the top fitness Twitter accounts — Jeff Nippard, Dr. Mike Israetel, Layne Norton, Huberman, Athlean-X, etc. Set my timezone to US/Eastern and active hours to 7 AM - 9 PM."</blockquote>
+<p>Claude Code will rewrite the entire config for your niche. Review what it produces — if anything looks off, just tell it to adjust.</p>
+
+<p><strong>Other settings worth reviewing:</strong></p>
+<table>
+  <thead>
+    <tr><th>Setting</th><th>Default</th><th>What to Consider</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>daily_post_limit</code></td><td>12</td><td>Twitter free tier allows ~16/day. Keep some buffer.</td></tr>
+    <tr><td><code>active_hour_start</code> / <code>active_hour_end</code></td><td>10 / 18</td><td>When YOUR audience is most active.</td></tr>
+    <tr><td><code>timezone</code></td><td>US/Central</td><td>Set to your timezone.</td></tr>
+    <tr><td><code>approval_timeout_minutes</code></td><td>60</td><td>How long the bot waits for you to respond before skipping.</td></tr>
+    <tr><td><code>priority_account_chance</code></td><td>0.55</td><td>How often the bot targets big accounts vs. keyword search.</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h3>Step 5: Test It Locally</h3>
+<p>Before deploying to the cloud, let's make sure everything works. Tell Claude Code:</p>
+<blockquote>"Install the Python dependencies and run a dry test of the bot."</blockquote>
+<p>Or if you prefer to do it yourself in the terminal:</p>
+<pre><code>pip install -r requirements.txt
+python -m tweetgod.main --dry-run</code></pre>
+<p>This runs one pipeline cycle without actually posting anything. You should see:</p>
+<ul>
+  <li>"TweetGod starting up"</li>
+  <li>"Pipeline run: keyword=..."</li>
+  <li>"Scraped X tweets"</li>
+  <li>"Best tweet: @someone..."</li>
+  <li>A Telegram message on your phone asking for your take</li>
+</ul>
+<p><strong>If you get the Telegram message, everything is wired up correctly.</strong> Type "5" to skip it (we're just testing).</p>
+<p>If you get errors, just paste the error message into Claude Code:</p>
+<blockquote>"I'm getting this error when running TweetGod: [paste the error]. Help me fix it."</blockquote>
+<p><strong>Common issues and what they mean:</strong></p>
+<ul>
+  <li><strong>"Twitter API 403"</strong> — Your app permissions are "Read" only. Go back to the Twitter developer portal, change to "Read and Write", and regenerate your access tokens.</li>
+  <li><strong>"Apify error 401"</strong> — Invalid API token. Double-check your APIFY_API_TOKEN in the .env file.</li>
+  <li><strong>"Supabase relation does not exist"</strong> — You forgot to run <code>setup.sql</code>. Go to Supabase SQL Editor and run it.</li>
+  <li><strong>"Telegram sendMessage failed"</strong> — Wrong bot token or chat ID. Verify both values.</li>
+</ul>
+
+<hr>
+
+<h3>Step 6: Push to GitHub and Deploy to Railway</h3>
+<p>The bot works locally — now let's get it running 24/7 in the cloud. First, you need your own GitHub repo so Railway can deploy from it.</p>
+<p>Tell Claude Code:</p>
+<blockquote>"Create a new private GitHub repo called TweetGod under my account, set it as the remote origin, and push all the code."</blockquote>
+<p>Claude Code will handle the git setup. Once pushed, deploy to Railway:</p>
+<ol>
+  <li>Go to <strong>https://railway.app</strong> and log in</li>
+  <li>Click <strong>"New Project"</strong> → <strong>"Deploy from GitHub Repo"</strong></li>
+  <li>Select your TweetGod repository</li>
+  <li>Railway sees the <code>Procfile</code> and automatically sets up a worker process</li>
+</ol>
+<p><strong>Add your environment variables to Railway:</strong></p>
+<ol>
+  <li>Click on your service in Railway</li>
+  <li>Go to the <strong>Variables</strong> tab</li>
+  <li>Click <strong>"Raw Editor"</strong> and paste all your env vars (the same ones from your .env file, just the KEY=VALUE lines without comments)</li>
+  <li>Click "Update Variables"</li>
+</ol>
+<p><strong>That's it.</strong> Railway will build and deploy automatically. Within 25-55 minutes, you'll get your first Telegram notification with a tweet to quote. The bot is now running 24/7 — you can close your laptop.</p>
+<p><strong>Monitoring:</strong> Check the Railway <strong>Logs</strong> tab anytime to see your bot running. You'll see pipeline runs, scrape results, scores, and any errors in real time.</p>
+
+<hr>
+
+<h3>Step 11 (Optional): Deploy the Analytics Dashboard</h3>
+<p>The dashboard gives you a web UI to see your posting history, keyword performance, and engagement trends.</p>
+<ol>
+  <li>Go to <strong>https://vercel.com</strong> and sign up (GitHub login)</li>
+  <li>Click <strong>"Add New Project"</strong> → import your TweetGod repo</li>
+  <li>Set the <strong>Root Directory</strong> to <code>dashboard</code></li>
+  <li>Add these environment variables:
+    <ul>
+      <li><code>NEXT_PUBLIC_SUPABASE_URL</code> = your Supabase project URL</li>
+      <li><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> = your Supabase <strong>anon</strong> key (NOT the service_role key — the dashboard only needs read access, and this key is safe to expose in frontend code)</li>
+    </ul>
+  </li>
+  <li>Deploy</li>
+</ol>
+<p>Vercel will build the Next.js app and give you a URL. The dashboard has 5 tabs:</p>
+<ul>
+  <li><strong>Overview</strong> — Total replies, likes, best keyword</li>
+  <li><strong>Replies</strong> — Feed of all your quote tweets</li>
+  <li><strong>Reviews</strong> — Audit log (what you saw, what you typed, what happened)</li>
+  <li><strong>Keywords</strong> — Performance per keyword</li>
+  <li><strong>Analytics</strong> — 30-day trends</li>
+</ul>
+
+<hr>
+
+<h3>Step 12: Daily Operations</h3>
+<p>Once deployed, here's your daily workflow:</p>
+<p><strong>When a Telegram notification comes in:</strong></p>
+<ol>
+  <li>Read the tweet and the context (author, likes, age, score)</li>
+  <li>Click "View Tweet" to see it on Twitter if you need more context</li>
+  <li>Type your honest take — don't overthink it, stream of consciousness is fine</li>
+  <li>Review the polished version Grok sends back</li>
+  <li>Type "1" to post, type edits for another pass, or "5" to skip</li>
+</ol>
+<p><strong>Telegram commands:</strong></p>
+<ul>
+  <li><code>/pause</code> — Pause the bot (default: 2 hours)</li>
+  <li><code>/pause 4h</code> — Pause for 4 hours</li>
+  <li><code>/pause today</code> — Pause until midnight</li>
+  <li><code>/resume</code> — Resume immediately</li>
+  <li><code>/status</code> — Check pause status + today's post count</li>
+</ul>
+<p><strong>Tips for good results:</strong></p>
+<ul>
+  <li>Be genuine. The best quote tweets add real value or a real perspective.</li>
+  <li>Don't quote tweet just to agree. "Great point!" adds nothing.</li>
+  <li>Controversial takes (when honest) perform best. Don't be contrarian for its own sake, but don't be afraid to disagree.</li>
+  <li>Speed matters. Tweets lose value fast. Try to respond within a few minutes of getting the notification.</li>
+  <li>Skip freely. If the tweet doesn't inspire a genuine reaction, skip it. Another one will come in 30 minutes.</li>
+</ul>
+
+<hr>
+
+<h3>Troubleshooting</h3>
+<p><strong>Bot isn't sending Telegram messages:</strong></p>
+<ul>
+  <li>Check Railway logs for errors</li>
+  <li>Verify TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are correct</li>
+  <li>Make sure you've messaged the bot at least once on Telegram</li>
+</ul>
+<p><strong>Tweets aren't posting:</strong></p>
+<ul>
+  <li>Check your Twitter app has "Read and Write" permissions</li>
+  <li>Regenerate access tokens after changing permissions</li>
+  <li>Check Railway logs for Twitter API errors</li>
+</ul>
+<p><strong>"No tweets passed quality filter":</strong></p>
+<ul>
+  <li>Your keywords might be too niche. Broaden them.</li>
+  <li>Your priority accounts might not be tweeting during active hours. Add more accounts.</li>
+  <li>The age filters might be too strict. In config.py, try increasing <code>max_tweet_age_hours</code>.</li>
+</ul>
+<p><strong>Dashboard shows no data:</strong></p>
+<ul>
+  <li>Make sure you're using the anon key (not service_role) for the dashboard</li>
+  <li>Check that your Supabase URL is correct in Vercel env vars</li>
+  <li>The bot needs to post at least one tweet before the dashboard has data to show</li>
+</ul>
+<p><strong>Want to change something?</strong> Open Claude Code in your TweetGod directory and just describe what you want. For example:</p>
+<ul>
+  <li>"Add a new keyword 'machine learning' to the keyword list"</li>
+  <li>"Change active hours to 8 AM - 10 PM Eastern"</li>
+  <li>"Add @elonmusk to my priority accounts"</li>
+  <li>"Make the bot post up to 15 times per day instead of 12"</li>
+</ul>
+<p>Claude Code can modify any part of the config or codebase for you.</p>
+
+<hr>
+
+<h3>Cost Summary</h3>
+<table>
+  <thead>
+    <tr><th>Service</th><th>Monthly Cost</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Railway (bot hosting)</td><td>~$5</td></tr>
+    <tr><td>Apify (tweet scraping)</td><td>~$5-10</td></tr>
+    <tr><td>Supabase (database)</td><td>Free</td></tr>
+    <tr><td>Vercel (dashboard)</td><td>Free</td></tr>
+    <tr><td>xAI/Grok (LLM)</td><td>~$1</td></tr>
+    <tr><td>Twitter API</td><td>Free</td></tr>
+    <tr><td>Telegram</td><td>Free</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>~$11-16/month</strong></td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h3>What's Next?</h3>
+<p>Once you have TweetGod running, here are things you can explore:</p>
+<ul>
+  <li><strong>Tune your scoring weights</strong> — If you're getting tweets that don't feel right, adjust the weights in <code>scorer.py</code></li>
+  <li><strong>Add more search modes</strong> — The <code>selector.py</code> routing is easy to extend</li>
+  <li><strong>Build a leaderboard</strong> — Query <code>replied_tweets</code> to see which accounts you've engaged with most</li>
+  <li><strong>A/B test approaches</strong> — Track which types of quote tweets get the most engagement</li>
+  <li><strong>Add auto-approval for certain accounts</strong> — If you always approve quotes of @someone, automate that</li>
+</ul>
+<p>All of these are things you can build by opening Claude Code and describing what you want. That's the power of having a well-structured codebase — Claude Code can navigate it and make precise changes.</p>
