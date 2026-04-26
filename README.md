@@ -280,9 +280,3 @@ Key tuning knobs in `tweetgod/config.py`:
 | **Hosting** | Railway (bot) + Vercel (dashboard) |
 
 ---
-
-<div align="center">
-
-**Built by [Chase](https://x.com/ChaseAI)**
-
-</div>
