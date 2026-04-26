@@ -135,7 +135,8 @@ async def _run_actor(actor_id: str, payload: dict) -> list[Tweet]:
 
     async with httpx.AsyncClient(timeout=300) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        if resp.status_code != 200:
+        # Apify may return 200 or 201 from run-sync endpoints — both are success.
+        if not resp.is_success:
             log.error("Apify error %d: %s", resp.status_code, resp.text[:500])
             resp.raise_for_status()
         items = resp.json()

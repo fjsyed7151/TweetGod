@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS reply_reviews (
   tweet_url           TEXT,
   ai_reply_text       TEXT NOT NULL,
   final_reply_text    TEXT NOT NULL,
-  outcome             TEXT CHECK (outcome IN ('approved','edited','rejected','auto_approved')),
+  outcome             TEXT CHECK (outcome IN ('approved','edited','rejected','auto_approved','timeout')),
   reply_style         TEXT,
   source_type         TEXT,
   score               FLOAT,
