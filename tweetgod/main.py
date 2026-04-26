@@ -114,7 +114,7 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
     4. Filter + dedup + author diversity filter
     5. Score + rank
     6. Softmax pick from top-N
-    7. Present to Chase via Telegram, get his take, polish, iterate
+    7. Present to user via Telegram, get their take, polish, iterate
     8. Post quote tweet + save + notify
 
     Returns the PostedQuote if successful, None otherwise.
@@ -211,7 +211,7 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
         best.tweet.text[:80],
     )
 
-    # ── Step 7: Approval flow (Chase writes his take, LLM polishes, iterate) ──
+    # ── Step 7: Approval flow (user writes their take, LLM polishes, iterate) ──
     approval = await request_approval(
         candidate=best,
         keyword=keyword,

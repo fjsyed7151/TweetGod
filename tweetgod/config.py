@@ -97,45 +97,70 @@ settings = Settings()
 
 
 # ── Persona ──────────────────────────────────────────────────────────────────
-# CUSTOMIZE THIS: Replace with your own name, bio, and voice description.
-# This is what Grok uses to understand your voice when polishing tweets.
+# Used by the LLM to understand voice when polishing quote tweets.
 
 PERSONA = {
-    "name": "Your Name",
+    "name": "Fajasy",
     "bio": (
-        "Your bio here. Include your background, what you do, and what "
-        "you're known for. This helps the LLM understand your voice."
+        "Founder of StableBread (stablebread.com). Studied finance, then equity "
+        "research, VC, startups, and consulting. Value investor focused on "
+        "high-quality undervalued businesses for long-term returns. Writes about "
+        "stock analysis, stock valuation (DCF, DDM, multiples, comps), and "
+        "portfolio management. 150+ articles, 500k+ words, cited by Investopedia, "
+        "Goldman Sachs, OECD, Morningstar, KPMG, Chicago Booth, and others. "
+        "Builds spreadsheet models including an automated stock analysis sheet, "
+        "financial/SEC metrics databases, and runs DCF/DDM courses."
     ),
     "voice": (
-        "Describe how you write. Are you casual or formal? Direct or nuanced? "
-        "Do you use humor? What phrases do you avoid? Be specific — the more "
-        "detail here, the better Grok preserves your actual voice."
+        "Casual, like texting a friend who also invests, but keeps real finance "
+        "lingo since the audience is value investors. Lowercase by default; only "
+        "proper nouns and finance acronyms (DCF, FCF, ROIC, WACC, EBITDA, P/E, "
+        "Fed, SEC) get capitalized. Sentences usually short. No period at the "
+        "end of single-sentence posts. Uses 'ye', 'u', 'id', 'idk' naturally. "
+        "Almost never emojis. Uses $TICKER for public companies (no parentheses, "
+        "no characters immediately left of the $). Avoids corporate/AI filler "
+        "words and em-dashes."
     ),
 }
 
 
 # ── Keywords & Communities ───────────────────────────────────────────────────
-# CUSTOMIZE THIS: Replace with keywords relevant to YOUR niche.
-# These are the search terms the bot uses to find tweets worth engaging with.
-# Tip: Ask Claude Code to help you brainstorm keywords for your niche.
+# Search terms the bot uses to find tweets worth quote-tweeting.
+# Targeted at value investing / fundamental analysis discourse.
 
 KEYWORDS: list[str] = [
-    # Your core tools/topics (what you teach or work with)
-    "your tool 1",
-    "your tool 2",
-    "your topic 1",
-    # Your audience's interests (what they care about)
-    "audience interest 1",
-    "audience interest 2",
-    "audience interest 3",
+    # Valuation methods and inputs
+    "DCF model",
+    "intrinsic value",
+    "free cash flow",
+    "owner earnings",
+    "discount rate",
+    "WACC",
+    "dividend discount model",
+    "margin of safety",
+    "stock valuation",
+    "earnings quality",
+    # Quality / business analysis
+    "ROIC",
+    "moat",
+    "competitive advantage",
+    "capital allocation",
+    "earnings call",
+    # Portfolio / strategy
+    "value investing",
+    "asymmetric bet",
+    "portfolio construction",
+    "position sizing",
 ]
 
 TRENDING_KEYWORDS: list[str] = [
-    # Broader terms for catching viral conversations in your space.
-    # Keep these more general than your regular keywords.
-    "broad topic 1",
-    "broad topic 2",
-    "broad topic 3",
+    # Broader market terms for catching viral conversations.
+    "stock market",
+    "earnings report",
+    "Fed",
+    "interest rates",
+    "S&P 500",
+    "recession",
 ]
 
 # ── Watchlist (Optional) ────────────────────────────────────────────────────
@@ -161,18 +186,56 @@ COMMUNITY_IDS: list[str] = [
 ]
 
 # ── Priority Accounts ───────────────────────────────────────────────────────
-# CUSTOMIZE THIS: The big accounts in YOUR niche you want to quote-tweet.
-# The bot checks their recent tweets 55% of the time.
-# Pick 20-40 accounts with large, engaged audiences in your space.
-# Tip: Ask Claude Code "Who are the top 30 Twitter accounts in [your niche]?"
+# Value-investing accounts Fajasy already engages with.
+# Bot samples `priority_sample_size` of these per run, 55% of the time.
 
 PRIORITY_ACCOUNTS: list[str] = [
-    # ── Big accounts (100K+ followers) ──
-    # "username1",     # Name — why they matter
-    # "username2",     # Name — why they matter
-    # ── Mid-tier accounts (10K-100K) — often engage back ──
-    # "username3",     # Name — why they matter
-    # "username4",     # Name — why they matter
-    # ── Official/brand accounts ──
-    # "username5",     # Brand — official account
+    "AltaFoxCapital", "HaydenCapital", "yliownyc", "FromValue",
+    "benjaminfelix", "AndrewRangeley", "MohnishPabrai", "AswathDamodaran",
+    "RamBhupatiraju", "jsblokland", "ballmatthew", "chriswmayer",
+    "FocusedCompound", "aaronvalue", "borrowed_ideas", "mastersinvest",
+    "10kdiver", "morganhousel", "mjmauboussin", "johnauthers",
+    "larryswedroe", "safalniveshak", "TheRoaringKitty", "saxena_puru",
+    "yesandnotyes", "LennyIce", "schaudenfraud", "TSOH_Investing",
+    "MoatsLikeKodak", "ShortSightedCap", "NoonSixCap", "Ren_aramb",
+    "MSmicrocaps", "MoneEchevarria", "Secrets4Stocks", "MediaKing",
+    "thegresearch", "SteveDJacobs", "manualofideas", "usppdd",
+    "pennycheck", "MoodyWriter13", "VladBastion", "rich_toad",
+    "OptimizedPort", "MikeFritzell", "Scifospace", "BaselineByAS",
+    "MoneyMarkStocks", "vjncapital_com", "DGretta_Author", "spacanpariman",
+    "daniel_koss", "crux_capital_", "accounting_ds", "AlmostMongolian",
+    "TheLAPurchaser", "CompoundingLab", "SpecialSitsNews", "AuditTheHerd",
+    "GrumpierBTDay", "FundaAI", "Davey_juice", "GnDsville",
+    "JohnTinsman", "Pixelresearch_", "rystivest", "8valueactivist",
+    "TheStockSurgeon", "fincopilot", "TheStockerMan", "PolarizingLit",
+    "varuninvesting", "Szew_invest", "EPSMonitor", "aijoin",
+    "GuastyWinds", "fpcapital_", "BramVGenechten", "DrewCohenMoney",
+    "Fred_Abyss", "RichardWedekin1", "bogumil_nyc", "walter_schloss",
+    "LockStockBarrl", "Stocks_Stones", "MOS_Investing", "michaeljburry",
+    "pattufreefincal", "sarfatti_IR", "HewittHeiserman", "MichaelBurry_",
+    "MarioGabelli", "TheStocksKing", "MichaelZero10", "stepnotonpets",
+    "joshtarasoff", "Kaizen_Investor", "romanchernin", "RobertJShiller",
+    "DeutscheBank", "Fenmagne", "andrewcoye", "ValueInvestShow",
+    "ReturnsJourney", "yianisz", "CJ0pp3l", "FeatherFund",
+    "BoxLongs", "athcapitalmgtm", "IntrinsicInv", "KabraxFX",
+    "aleabitoreddit", "PronkDaniel", "wisesheets", "Sandeman52",
+    "orrdavid", "geokoutalidis", "Atrium_Research", "SimeonResearch_",
+    "TherealDTMS", "RMantri", "mkfilko", "DeepValueBagger",
+    "Gavekal", "GfI_Himmelreich", "TradeSignalHQ", "onecentnvest",
+    "GilesCapital", "qualtrim", "ArthurCahuantzi", "Quant_Morales",
+    "atomicalcapital", "yuvataylor", "ETMONEY", "EugeneNg",
+    "Next100Baggers", "Speedwell_LLC", "TheOwnersEquity", "dede_eyesan",
+    "themathharbaugh", "LeStonkJames", "rrvest091", "carbonfinancex",
+    "P123Finance", "EightTrack180", "MindsetMoney_X", "jdmarkman",
+    "RankEquity", "DurableCreators", "meetblossomapp", "theb1gideas",
+    "MicroCapClub", "amitisinvesting", "MikeDDKing", "majgoeinvesting",
+    "SebKrog", "SFarringtonBKC", "GabGrowth", "HenryChien4",
+    "djpinvest", "IggyOnInvesting", "leevalueroach", "jasonzweigwsj",
+    "vitaliyk", "KmateoK", "simpleinvest01", "DavidFool",
+    "WOLF_Financial", "pernasresearch", "TacticzH", "Typhoon_Girl",
+    "KobeissiLetter", "Oaktree", "CCVisuals", "finance_schmidt",
+    "dsmoek98", "mvcinvesting", "ToffCap", "PrestonPysh",
+    "valuewalk", "BrianFeroldi", "iancassel", "Greenbackd",
+    "7LukeHallard", "F_Compounders", "PurdyInvestor", "MarketMaverickX",
+    "Vivek_Investor",
 ]

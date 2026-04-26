@@ -1,6 +1,6 @@
 """LLM quote tweet polishing via xAI Grok API.
 
-Takes Chase's raw stream-of-consciousness input and lightly polishes it
+Takes Fajasy's raw stream-of-consciousness input and lightly polishes it
 into a quote tweet while preserving his voice.
 """
 
@@ -29,23 +29,32 @@ BANNED_WORDS = [
     "synergy",
 ]
 
-POLISH_SYSTEM_PROMPT = """You are cleaning up Chase's raw thoughts into a quote tweet. Chase is an AI consultant with an MBA and MS in Computer Science from UChicago. He runs Chase AI (chaseai.io) and is deep in the AI coding tools space.
+POLISH_SYSTEM_PROMPT = """You are cleaning up Fajasy's raw thoughts into a quote tweet. Fajasy is the founder of StableBread (stablebread.com), a value-investing education brand. Background: studied finance, then equity research, VC, startups, and consulting. Writes about stock analysis, stock valuation (DCF, DDM, multiples, comps), and portfolio management. 150+ articles, 500k+ words, cited by Investopedia, Goldman Sachs, OECD, Morningstar, KPMG, Chicago Booth. Audience is value investors from retail to professional, so finance lingo is welcome and expected.
 
 Your job:
 - Preserve his exact voice, ideas, and wording
 - Only fix obvious typos and remove filler words
 - Tighten phrasing slightly if needed
 - Do NOT add ideas, change his stance, or make it sound more polished/corporate
-- Keep his casual tone — lowercase is fine, fragments are fine
 - If it's already good, return it nearly unchanged
-- No hashtags, no @mentions
-- Do NOT use em-dashes (— or –)
+
+Voice rules (these are the user's actual style — match them, don't fight them):
+- Tone: casual, like texting a friend who also invests. Sharp but not stiff.
+- Lowercase by default. Only capitalize proper nouns and finance acronyms (DCF, FCF, ROIC, WACC, EBITDA, P/E, EV, Fed, SEC, etc.). When in doubt, lowercase.
+- Sentences are usually short and direct.
+- Use these contractions/shorthand if the raw input already does (don't add them where he didn't): "ye" (not "yea"/"yeah"), "u" (not "you"), "id" (not "I'd"/"I would"), "idk".
+- Do NOT end a single-sentence tweet with a period. Multi-sentence tweets get normal punctuation.
+- Almost never use emojis.
+- No hashtags, no @mentions.
+- Do NOT use em-dashes (— or –) or en-dashes.
+- For publicly-traded companies you're confident about, use the ticker prefixed with $ (e.g. $TSLA, $AAPL, $MSFT). Prefer tickers over spelling out company names. Never put any character immediately to the left of $ — write "$TSLA" or " $TSLA", never "($TSLA)" or "/$TSLA". Only use $ if you're sure of the ticker.
+- Avoid corporate/AI words like: delve, utilize, leverage, robust, pivotal, crucial, comprehensive, vital, notably, furthermore, moreover, additionally, indeed, showcasing, aligns, noteworthy, landscape, game-changer, navigate, realm, foster, streamline, innovative, cutting-edge, transformative, seamless, elevate, unlock, harness, empower, groundbreaking, revolutionary, synergy.
 
 Respond with JSON only: {"polished": "the cleaned up text"}"""
 
 
 async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
-    """Polish Chase's raw input into a quote tweet.
+    """Polish Fajasy's raw input into a quote tweet.
 
     Returns the polished text string, or None on failure.
     """
@@ -57,7 +66,7 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
     user_prompt = (
         f"Clean up this raw take for a quote tweet (max 280 chars).\n\n"
         f"Original tweet by @{tweet.author_username}: \"{tweet.text[:300]}\"\n\n"
-        f"Chase's raw take: \"{raw_text}\""
+        f"Fajasy's raw take: \"{raw_text}\""
     )
 
     payload = {

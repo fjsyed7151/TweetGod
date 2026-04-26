@@ -1,10 +1,10 @@
 """Telegram approval flow for human-driven quote tweets.
 
 Flow:
-1. Present tweet to Chase via Telegram
-2. Chase types raw take (or "5" to skip)
+1. Present tweet to the user via Telegram
+2. User types raw take (or "5" to skip)
 3. LLM polishes the raw text
-4. Chase approves ("1"), provides edits, or skips ("5")
+4. User approves ("1"), provides edits, or skips ("5")
 5. Iterate until approved or skipped
 """
 
@@ -191,7 +191,7 @@ async def request_approval(
     score: float,
     search_type: str,
 ) -> ApprovalResult:
-    """Present a tweet to Chase, get his raw take, polish it, and iterate until approved or skipped."""
+    """Present a tweet to the user, get their raw take, polish it, and iterate until approved or skipped."""
     global approval_active
 
     if not settings.telegram_bot_token or not settings.telegram_chat_id:
@@ -205,7 +205,7 @@ async def request_approval(
         log.warning("Could not send tweet presentation, skipping")
         return ApprovalResult(outcome="rejected", final_text="")
 
-    log.info("Tweet presented (msg_id=%d), waiting for Chase's take...", msg_id)
+    log.info("Tweet presented (msg_id=%d), waiting for user's take...", msg_id)
 
     # Flush old updates before polling
     updates = await _get_updates()
@@ -236,7 +236,7 @@ async def request_approval(
             )
 
         if _is_skip(text):
-            log.info("Tweet skipped by Chase")
+            log.info("Tweet skipped by user")
             return ApprovalResult(
                 outcome="rejected",
                 final_text="",
@@ -293,7 +293,7 @@ async def request_approval(
                     response_time_seconds=int(time.monotonic() - start_time),
                 )
 
-            # Chase typed something else — could be a direct replacement or feedback
+            # User typed something else, could be a direct replacement or feedback
             # If it's short and clean (looks like final text), use it directly
             # If it's longer feedback/direction, send back to LLM
             if len(text) <= 280 and not any(w in text.lower() for w in ["make it", "change", "more", "less", "try", "instead"]):

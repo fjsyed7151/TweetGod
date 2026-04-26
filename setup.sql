@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS style_stats (
 );
 
 -- 4. reply_reviews — full audit log of the approval flow
---    (what Chase saw, what he typed, what the LLM produced, what happened)
+--    (what the user saw, what they typed, what the LLM produced, what happened)
 CREATE TABLE IF NOT EXISTS reply_reviews (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tweet_id            TEXT NOT NULL,
