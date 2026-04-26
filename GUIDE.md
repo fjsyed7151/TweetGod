@@ -2,8 +2,6 @@
 
 **A masterclass on when to build an app vs. use Claude Code directly, why TweetGod was built the way it was, and how to set up your own version from scratch.**
 
-By Chase (chaseai.io)
-
 ---
 
 ## Table of Contents
