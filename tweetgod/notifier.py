@@ -38,11 +38,15 @@ async def send_message(text: str) -> None:
 async def notify_success(quote: PostedQuote, keyword: str, score: float) -> None:
     """Send a success notification for a posted quote tweet."""
     source_label = f"\nSource: {quote.source_type}" if quote.source_type != "keyword" else ""
-    quote_url = f"https://x.com/i/status/{quote.quote_tweet_id}" if quote.quote_tweet_id else ""
-    link_line = f"\n\U0001f517 <a href=\"{quote_url}\">View Quote Tweet</a>" if quote_url else ""
+    # Only build an X URL if we have a real X status id (not a "tf:"-prefixed
+    # Typefully draft id awaiting resolution by engagement_tracker).
+    if quote.quote_tweet_id and not quote.quote_tweet_id.startswith("tf:"):
+        link_line = f"\n\U0001f517 https://x.com/i/status/{quote.quote_tweet_id}"
+    else:
+        link_line = ""
     text = (
         f"<b>Quote tweet posted</b>\n\n"
-        f"Quoting: @{quote.author_username}\n"
+        f"Quoting: <a href=\"https://x.com/{quote.author_username}\">@{quote.author_username}</a>\n"
         f"Original: {quote.tweet_url}\n"
         f"Quote: <i>{quote.quote_text}</i>\n"
         f"Keyword: {keyword}\n"
@@ -105,10 +109,10 @@ async def notify_watchlist_tweet(tweet, matched_keywords: list[str]) -> None:
     age_str = f"{tweet.age_hours:.1f}h ago" if tweet.age_hours < 999 else "recent"
     text = (
         f"<b>Claude Code Alert</b>\n\n"
-        f"@{tweet.author_username} ({age_str})\n\n"
+        f"<a href=\"https://x.com/{tweet.author_username}\">@{tweet.author_username}</a> ({age_str})\n\n"
         f"<i>{tweet.text[:500]}</i>\n\n"
         f"Matched: {kw_str}\n"
-        f"<a href=\"{tweet.url}\">View Tweet</a>"
+        f"\U0001f517 {tweet.url}"
     )
     await send_message(text)
 

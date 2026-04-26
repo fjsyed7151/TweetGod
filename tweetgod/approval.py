@@ -61,13 +61,14 @@ def _build_tweet_message(
     rts = candidate.tweet.retweets
     age = candidate.tweet.age_hours
 
+    username = candidate.tweet.author_username
     return (
         f"\U0001f4ac <b>Quote Tweet Opportunity</b>\n\n"
-        f"From: @{candidate.tweet.author_username} ({followers} followers)\n"
+        f"From: <a href=\"https://x.com/{username}\">@{username}</a> ({followers} followers)\n"
         f"\"{tweet_text}\"\n"
         f"Likes: {likes:,} | RTs: {rts:,} | {age:.1f}h ago\n"
         f"Score: {score:.2f} | Source: {search_type}\n"
-        f"\U0001f517 <a href=\"{tweet_link}\">View Tweet</a>\n\n"
+        f"\U0001f517 {tweet_link}\n\n"
         f"What's your take? (type your thoughts, or 5 to skip)"
     )
 
