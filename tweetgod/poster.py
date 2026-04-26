@@ -58,14 +58,27 @@ def _resolve_social_set_id() -> str | None:
         log.error("Typefully /social-sets fetch failed", exc_info=True)
         return None
 
-    # Response shape per Typefully API: {"data": [{"id": ..., "platforms": {...}}, ...]}
-    sets = data.get("data") or data.get("social_sets") or (data if isinstance(data, list) else [])
+    # Response shape per Typefully v2: {"results": [{"id": ..., "platforms": {...}}, ...],
+    # "count": N, "limit": ..., "offset": ..., "next": ..., "previous": ...}
+    # Tolerate alternate wrappers just in case.
+    sets = (
+        data.get("results")
+        or data.get("data")
+        or data.get("social_sets")
+        or (data if isinstance(data, list) else [])
+    )
     for s in sets:
         platforms = s.get("platforms") or {}
-        x = platforms.get("x") or platforms.get("twitter") or {}
-        if x and (x.get("enabled") or x.get("connected")):
+        # Per the v2 schema, platforms.x has no enabled/connected flag —
+        # its presence (with a username) IS the "X is connected" signal.
+        x = platforms.get("x") or platforms.get("twitter")
+        if isinstance(x, dict) and x.get("username"):
             _cached_social_set_id = str(s["id"])
-            log.info("Auto-discovered Typefully social_set_id=%s", _cached_social_set_id)
+            log.info(
+                "Auto-discovered Typefully social_set_id=%s (X account: @%s)",
+                _cached_social_set_id,
+                x.get("username"),
+            )
             return _cached_social_set_id
 
     # Fallback: first set, X-or-not — better than failing outright
