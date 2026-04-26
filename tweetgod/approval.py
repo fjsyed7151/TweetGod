@@ -64,7 +64,7 @@ def _build_tweet_message(
     username = candidate.tweet.author_username
     return (
         f"\U0001f4ac <b>Quote Tweet Opportunity</b>\n\n"
-        f"From: <a href=\"https://x.com/{username}\">@{username}</a> ({followers} followers)\n"
+        f"From: https://x.com/{username} ({followers} followers)\n"
         f"\"{tweet_text}\"\n"
         f"Likes: {likes:,} | RTs: {rts:,} | {age:.1f}h ago\n"
         f"Score: {score:.2f} | Source: {search_type}\n"

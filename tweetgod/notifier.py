@@ -46,7 +46,7 @@ async def notify_success(quote: PostedQuote, keyword: str, score: float) -> None
         link_line = ""
     text = (
         f"<b>Quote tweet posted</b>\n\n"
-        f"Quoting: <a href=\"https://x.com/{quote.author_username}\">@{quote.author_username}</a>\n"
+        f"Quoting: https://x.com/{quote.author_username}\n"
         f"Original: {quote.tweet_url}\n"
         f"Quote: <i>{quote.quote_text}</i>\n"
         f"Keyword: {keyword}\n"
@@ -109,7 +109,7 @@ async def notify_watchlist_tweet(tweet, matched_keywords: list[str]) -> None:
     age_str = f"{tweet.age_hours:.1f}h ago" if tweet.age_hours < 999 else "recent"
     text = (
         f"<b>Claude Code Alert</b>\n\n"
-        f"<a href=\"https://x.com/{tweet.author_username}\">@{tweet.author_username}</a> ({age_str})\n\n"
+        f"https://x.com/{tweet.author_username} ({age_str})\n\n"
         f"<i>{tweet.text[:500]}</i>\n\n"
         f"Matched: {kw_str}\n"
         f"\U0001f517 {tweet.url}"
