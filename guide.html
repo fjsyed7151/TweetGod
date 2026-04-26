@@ -191,7 +191,7 @@
     <tr><td><code>selector.py</code></td><td>UCB1 keyword selection</td><td>Exploration/exploitation logic</td></tr>
     <tr><td><code>llm.py</code></td><td>Grok polish integration</td><td>LLM calls isolated — swap models easily</td></tr>
     <tr><td><code>approval.py</code></td><td>Telegram approval flow</td><td>Complex state machine, deserves its own file</td></tr>
-    <tr><td><code>poster.py</code></td><td>Twitter posting via tweepy</td><td>Thin wrapper around the Twitter API</td></tr>
+    <tr><td><code>poster.py</code></td><td>Quote tweet posting via Typefully API</td><td>Thin wrapper around Typefully v2</td></tr>
     <tr><td><code>dedup.py</code></td><td>Supabase read/write operations</td><td>All database logic in one place</td></tr>
     <tr><td><code>engagement_tracker.py</code></td><td>6-hour feedback loop</td><td>Checks past performance, updates stats</td></tr>
     <tr><td><code>notifier.py</code></td><td>Telegram notifications</td><td>All outbound messages</td></tr>
@@ -347,12 +347,10 @@ cd TweetGod-template</code></pre>
 <p>You should now have API keys/tokens from all 6 services saved somewhere. Time to wire them up. Go back to Claude Code (which should still be open in your TweetGod-template directory) and say:</p>
 <blockquote>"Create a .env file from .env.example. Here are my values:" </blockquote>
 <p>Then paste in your keys:</p>
-<pre><code>TWITTER_API_KEY=your_key_here
-TWITTER_API_SECRET=your_secret_here
-TWITTER_ACCESS_TOKEN=your_token_here
-TWITTER_ACCESS_TOKEN_SECRET=your_token_secret_here
-TWITTER_BEARER_TOKEN=your_bearer_token_here
-XAI_API_KEY=your_xai_key_here
+<pre><code>OPENROUTER_API_KEY=your_openrouter_key_here
+OPENROUTER_MODEL=x-ai/grok-4.1-fast
+TYPEFULLY_API_KEY=your_typefully_key_here
+TYPEFULLY_SOCIAL_SET_ID=
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_service_role_key_here
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here

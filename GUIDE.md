@@ -212,7 +212,7 @@ The pipeline runs through these steps in order:
 | `selector.py` | UCB1 keyword selection | Exploration/exploitation logic |
 | `llm.py` | Grok polish integration | LLM calls isolated — swap models easily |
 | `approval.py` | Telegram approval flow | Complex state machine, deserves its own file |
-| `poster.py` | Twitter posting via tweepy | Thin wrapper around the Twitter API |
+| `poster.py` | Quote tweet posting via Typefully API | Thin wrapper around Typefully v2 |
 | `dedup.py` | Supabase read/write operations | All database logic in one place |
 | `engagement_tracker.py` | 6-hour feedback loop | Checks past performance, updates stats |
 | `notifier.py` | Telegram notifications | All outbound messages |
@@ -393,12 +393,10 @@ You should now have API keys/tokens from all 6 services saved somewhere. Time to
 Then paste in your keys:
 
 ```
-TWITTER_API_KEY=your_key_here
-TWITTER_API_SECRET=your_secret_here
-TWITTER_ACCESS_TOKEN=your_token_here
-TWITTER_ACCESS_TOKEN_SECRET=your_token_secret_here
-TWITTER_BEARER_TOKEN=your_bearer_token_here
-XAI_API_KEY=your_xai_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
+OPENROUTER_MODEL=x-ai/grok-4.1-fast
+TYPEFULLY_API_KEY=your_typefully_key_here
+TYPEFULLY_SOCIAL_SET_ID=
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_service_role_key_here
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here

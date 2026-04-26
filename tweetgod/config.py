@@ -11,16 +11,17 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 class Settings(BaseSettings):
-    # Twitter API
-    twitter_api_key: str = ""
-    twitter_api_secret: str = ""
-    twitter_access_token: str = ""
-    twitter_access_token_secret: str = ""
-    twitter_bearer_token: str = ""
+    # OpenRouter (LLM polishing — replaces direct xAI Grok)
+    openrouter_api_key: str = ""
+    # Maps to xAI's `grok-4-1-fast-non-reasoning`. Reasoning is disabled
+    # at the request layer in llm.py via {"reasoning": {"enabled": false}}.
+    openrouter_model: str = "x-ai/grok-4.1-fast"
 
-    # xAI (Grok)
-    xai_api_key: str = ""
-    xai_model: str = "grok-4-1-fast-non-reasoning"
+    # Typefully (posting + analytics — replaces direct Twitter API)
+    typefully_api_key: str = ""
+    # Optional: pin a specific social set. If empty, poster.py auto-discovers
+    # the first social set with X enabled and caches it for the process.
+    typefully_social_set_id: str = ""
 
     # Supabase
     supabase_url: str = ""

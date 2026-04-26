@@ -20,11 +20,11 @@ Built with Python · xAI Grok · Next.js · Supabase
 
 ```
   🔍 Search Twitter          🧠 Score & Rank           ✍️ Generate Replies
-  (Apify scraper)    →    (5-signal composite)   →    (xAI Grok, 5 styles)
+  (Apify scraper)    →    (5-signal composite)   →    (Grok via OpenRouter)
                                                             │
                                                             ▼
-  📊 Track Engagement    ←    🐦 Post to Twitter    ←    📱 Telegram Approval
-  (24h feedback loop)         (tweepy)                   (pick / edit / skip)
+  📊 Track Engagement    ←    🐦 Post to X         ←    📱 Telegram Approval
+  (Typefully analytics)       (Typefully API)            (pick / edit / skip)
 ```
 
 TweetGod runs on a **25-55 minute randomized interval** during active hours. It finds tweets worth replying to, generates replies in multiple styles, sends them to Telegram for human review, and posts approved replies. A feedback loop tracks engagement and adjusts strategy over time.
@@ -124,15 +124,13 @@ python -m tweetgod.main
 ### Environment Variables
 
 ```bash
-# Twitter API
-TWITTER_API_KEY=
-TWITTER_API_SECRET=
-TWITTER_ACCESS_TOKEN=
-TWITTER_ACCESS_TOKEN_SECRET=
-TWITTER_BEARER_TOKEN=
+# OpenRouter (LLM polishing)
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=x-ai/grok-4.1-fast
 
-# xAI Grok
-XAI_API_KEY=
+# Typefully (posting + analytics)
+TYPEFULLY_API_KEY=
+TYPEFULLY_SOCIAL_SET_ID=   # optional, auto-discovered if blank
 
 # Supabase
 SUPABASE_URL=
@@ -272,11 +270,12 @@ Key tuning knobs in `tweetgod/config.py`:
 
 | Layer | Technology |
 |:---|:---|
-| **Bot** | Python 3.12, tweepy, httpx, APScheduler, Pydantic |
-| **LLM** | xAI Grok (`grok-4-1-fast-non-reasoning`) |
+| **Bot** | Python 3.12, httpx, APScheduler, Pydantic |
+| **LLM** | Grok 4.1 Fast via OpenRouter (`x-ai/grok-4.1-fast`, non-reasoning) |
+| **Posting + Analytics** | Typefully API v2 |
 | **Scraping** | Apify Twitter Scraper |
 | **Dashboard** | Next.js 16, TypeScript, Tailwind CSS, shadcn/ui, Recharts |
 | **Database** | Supabase (PostgreSQL) |
-| **Hosting** | Railway (bot) + Vercel (dashboard) |
+| **Hosting** | Zo Computer (bot + dashboard on one box) |
 
 ---

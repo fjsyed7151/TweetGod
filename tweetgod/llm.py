@@ -1,4 +1,4 @@
-"""LLM quote tweet polishing via xAI Grok API.
+"""LLM quote tweet polishing via OpenRouter (Grok 4.1 Fast).
 
 Takes Fajasy's raw stream-of-consciousness input and lightly polishes it
 into a quote tweet while preserving his voice.
@@ -16,7 +16,7 @@ from tweetgod.models import Tweet
 
 log = logging.getLogger(__name__)
 
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 BANNED_WORDS = [
     "delve", "utilize", "leverage", "robust", "pivotal", "crucial",
@@ -59,8 +59,11 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
     Returns the polished text string, or None on failure.
     """
     headers = {
-        "Authorization": f"Bearer {settings.xai_api_key}",
+        "Authorization": f"Bearer {settings.openrouter_api_key}",
         "Content-Type": "application/json",
+        # OpenRouter analytics attribution (optional but recommended)
+        "HTTP-Referer": "https://stablebread.com",
+        "X-Title": "TweetGod (StableBread)",
     }
 
     user_prompt = (
@@ -70,7 +73,7 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
     )
 
     payload = {
-        "model": settings.xai_model,
+        "model": settings.openrouter_model,
         "messages": [
             {"role": "system", "content": POLISH_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -78,11 +81,13 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
         "temperature": 0.4,
         "max_tokens": 300,
         "response_format": {"type": "json_object"},
+        # Disable reasoning to match xAI's `grok-4-1-fast-non-reasoning` variant
+        "reasoning": {"enabled": False},
     }
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(GROK_API_URL, json=payload, headers=headers)
+            resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
 

@@ -241,11 +241,12 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
         log.info("DRY RUN — would quote tweet: %s", best.tweet.url)
         return None
 
-    posted = post_quote_tweet(approval.final_text, best.tweet.tweet_id)
+    posted = post_quote_tweet(approval.final_text, best.tweet.url)
     if posted is None:
-        await notify_failure("Twitter API post failed", keyword)
+        await notify_failure("Typefully publish failed", keyword)
         return None
 
+    posted.tweet_id = best.tweet.tweet_id
     posted.author_username = best.tweet.author_username
     posted.tweet_url = best.tweet.url
     posted.keyword_used = keyword
