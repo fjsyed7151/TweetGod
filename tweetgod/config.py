@@ -47,13 +47,14 @@ class Settings(BaseSettings):
 
     # --- Bot behaviour ---
 
-    # Daily post limit (free tier = 500/month ≈ 16/day)
-    daily_post_limit: int = 12
+    # Daily post limit. Override via DAILY_POST_LIMIT env var.
+    daily_post_limit: int = 18
 
-    # Active hours (US Central / CT)
-    active_hour_start: int = 10  # 10 AM CT
-    active_hour_end: int = 18    # 6 PM CT
-    timezone: str = "US/Central"
+    # Active hours (US Eastern / ET; auto-handles EST<->EDT).
+    # Override via ACTIVE_HOUR_START / ACTIVE_HOUR_END env vars.
+    active_hour_start: int = 9   # 9 AM ET
+    active_hour_end: int = 21    # 9 PM ET
+    timezone: str = "US/Eastern"
 
     # Scheduler jitter (minutes)
     schedule_interval_min: int = 25
