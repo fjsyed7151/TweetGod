@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 
 import httpx
+import pytz
 
 from tweetgod.config import settings
 from tweetgod.models import PostedQuote
@@ -113,6 +114,38 @@ async def notify_watchlist_tweet(tweet, matched_keywords: list[str]) -> None:
         f"<i>{tweet.text[:500]}</i>\n\n"
         f"Matched: {kw_str}\n"
         f"\U0001f517 {tweet.url}"
+    )
+    await send_message(text)
+
+
+async def notify_start_of_day() -> None:
+    """Telegram heartbeat at the start of the active posting window."""
+    from tweetgod.pause import is_paused, format_remaining
+
+    tz_label = datetime.now(pytz.timezone(settings.timezone)).tzname()
+    pause_note = ""
+    if is_paused():
+        pause_note = f" (paused: {format_remaining()})"
+
+    text = (
+        f"☀️ <b>Starting daily run{pause_note}</b>\n"
+        f"Active until {settings.active_hour_end}:00 {tz_label} — "
+        f"limit {settings.daily_post_limit} posts"
+    )
+    await send_message(text)
+
+
+async def notify_stop_of_day() -> None:
+    """Telegram heartbeat at the end of the active posting window."""
+    from tweetgod.dedup import get_today_post_count
+
+    tz_label = datetime.now(pytz.timezone(settings.timezone)).tzname()
+    posts_today = get_today_post_count()
+
+    text = (
+        f"\U0001f319 <b>Stopped for the day</b>\n"
+        f"Posts: {posts_today}/{settings.daily_post_limit} — "
+        f"resuming at {settings.active_hour_start}:00 {tz_label}"
     )
     await send_message(text)
 

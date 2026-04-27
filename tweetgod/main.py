@@ -37,7 +37,9 @@ from tweetgod.notifier import (
     notify_no_tweets,
     notify_paused,
     notify_resumed,
+    notify_start_of_day,
     notify_status,
+    notify_stop_of_day,
     notify_success,
     notify_watchlist_tweet,
     send_message,
@@ -433,12 +435,40 @@ def start_scheduler() -> None:
         max_instances=1,
     )
 
+    # Daily heartbeats: ping Telegram at the start and end of the active window
+    bot_tz = pytz.timezone(settings.timezone)
+    scheduler.add_job(
+        notify_start_of_day,
+        CronTrigger(
+            hour=settings.active_hour_start,
+            minute=0,
+            timezone=bot_tz,
+        ),
+        id="start_of_day",
+        name="Start of day notification",
+        max_instances=1,
+    )
+    scheduler.add_job(
+        notify_stop_of_day,
+        CronTrigger(
+            hour=settings.active_hour_end,
+            minute=0,
+            timezone=bot_tz,
+        ),
+        id="end_of_day",
+        name="End of day notification",
+        max_instances=1,
+    )
+
     scheduler.start()
     log.info(
         "Scheduler started: pipeline every %d-%d min, engagement check every 6h, "
-        "RAG refresh Mon+Thu 8am ET",
+        "RAG refresh Mon+Thu 8am ET, daily heartbeats at %d:00 + %d:00 %s",
         settings.schedule_interval_min,
         settings.schedule_interval_max,
+        settings.active_hour_start,
+        settings.active_hour_end,
+        settings.timezone,
     )
 
 
