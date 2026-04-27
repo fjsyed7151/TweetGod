@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # the first social set with X enabled and caches it for the process.
     typefully_social_set_id: str = ""
 
+    # OpenAI (RAG embeddings only — Grok still does the polish)
+    openai_api_key: str = ""
+    # text-embedding-3-large with dimensions=1536: best quality, fits HNSW
+    openai_embed_model: str = "text-embedding-3-large"
+    rag_enabled: bool = False  # flip to True in env after corpus is ingested
+
     # Supabase
     supabase_url: str = ""
     supabase_key: str = ""
