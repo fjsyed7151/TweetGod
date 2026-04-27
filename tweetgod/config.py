@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # text-embedding-3-large with dimensions=1536: best quality, fits HNSW
     openai_embed_model: str = "text-embedding-3-large"
     rag_enabled: bool = False  # flip to True in env after corpus is ingested
+    rag_top_k: int = 5
+    rag_similarity_threshold: float = 0.3
 
     # Supabase
     supabase_url: str = ""

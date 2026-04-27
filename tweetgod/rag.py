@@ -178,3 +178,95 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             f"OpenAI returned {len(vectors)} vectors for {len(texts)} inputs"
         )
     return vectors
+
+
+def retrieve_context(
+    query: str,
+    k: int | None = None,
+    threshold: float | None = None,
+) -> list[dict]:
+    """Embed a query, find the top-K most similar chunks via the match_chunks RPC.
+
+    Returns a list of dicts (one per chunk) with these keys:
+      chunk_id, article_id, content, ordinal, similarity,
+      article_title, article_url, featured_image_url
+
+    Returns [] if RAG isn't configured or the query is empty.
+    """
+    if not query or not query.strip():
+        return []
+    if not settings.openai_api_key or not settings.supabase_url:
+        log.warning("retrieve_context called but OpenAI/Supabase not configured")
+        return []
+
+    k = k if k is not None else settings.rag_top_k
+    threshold = threshold if threshold is not None else settings.rag_similarity_threshold
+
+    try:
+        vectors = embed_texts([query])
+    except Exception:
+        log.error("Failed to embed RAG query", exc_info=True)
+        return []
+    if not vectors:
+        return []
+
+    # Lazy import to avoid circular deps with dedup.py
+    from tweetgod.dedup import _get_client
+    supabase = _get_client()
+
+    try:
+        resp = supabase.rpc(
+            "match_chunks",
+            {
+                "query_embedding": vectors[0],
+                "match_threshold": threshold,
+                "match_count": k,
+            },
+        ).execute()
+    except Exception:
+        log.error("match_chunks RPC failed", exc_info=True)
+        return []
+
+    return resp.data or []
+
+
+def format_excerpts(chunks: list[dict]) -> str:
+    """Format retrieved chunks into a string block for prompt injection."""
+    if not chunks:
+        return ""
+    parts = []
+    for c in chunks:
+        title = c.get("article_title", "")
+        url = c.get("article_url", "")
+        content = c.get("content", "")
+        parts.append(f"[Article: \"{title}\" — {url}]\n{content}")
+    return "\n\n".join(parts)
+
+
+# CLI test mode: `python -m tweetgod.rag "DCF discount rate"`
+# Lets you eyeball retrieval quality before turning RAG_ENABLED on.
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage: python -m tweetgod.rag <query>", file=sys.stderr)
+        sys.exit(1)
+
+    q = " ".join(sys.argv[1:])
+    print(f"Query: {q!r}\n")
+    results = retrieve_context(q)
+    if not results:
+        print("No matching chunks found.")
+        sys.exit(0)
+
+    print(f"Top {len(results)} chunks:\n")
+    for r in results:
+        sim = r.get("similarity", 0.0)
+        title = r.get("article_title", "")
+        url = r.get("article_url", "")
+        content = r.get("content", "")
+        preview = content[:300].replace("\n", " ")
+        print(f"--- similarity={sim:.3f} | {title}")
+        print(f"    {url}")
+        print(f"    {preview}{'...' if len(content) > 300 else ''}")
+        print()

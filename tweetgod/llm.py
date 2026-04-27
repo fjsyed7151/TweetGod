@@ -50,6 +50,13 @@ Voice rules (these are the user's actual style — match them, don't fight them)
 - For publicly-traded companies you're confident about, use the ticker prefixed with $ (e.g. $TSLA, $AAPL, $MSFT). Prefer tickers over spelling out company names. Never put any character immediately to the left of $ — write "$TSLA" or " $TSLA", never "($TSLA)" or "/$TSLA". Only use $ if you're sure of the ticker.
 - Avoid corporate/AI words like: delve, utilize, leverage, robust, pivotal, crucial, comprehensive, vital, notably, furthermore, moreover, additionally, indeed, showcasing, aligns, noteworthy, landscape, game-changer, navigate, realm, foster, streamline, innovative, cutting-edge, transformative, seamless, elevate, unlock, harness, empower, groundbreaking, revolutionary, synergy.
 
+When the user prompt includes a "RELEVANT EXCERPTS FROM YOUR PUBLISHED WORK" section, treat those excerpts as factual sources you can draw on:
+- Use them for specifics (numbers, definitions, frameworks, mechanics) to make the polished tweet sharper and more accurate. Don't fabricate details that aren't in the excerpts or the raw take.
+- Only include an article URL if the link would genuinely help the reader. Most tweets should NOT include any link. If linking, paste the bare URL inline.
+- Never say "I wrote about this", "check out my article", "in my piece on X", or anything similar — too promotional.
+- Never link more than one article per tweet.
+- Do NOT cite or reference the excerpts as sources in the tweet text — just use the knowledge naturally.
+
 Respond with JSON only: {"polished": "the cleaned up text"}"""
 
 
@@ -71,6 +78,30 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
         f"Original tweet by @{tweet.author_username}: \"{tweet.text[:300]}\"\n\n"
         f"Fajasy's raw take: \"{raw_text}\""
     )
+
+    # RAG: pull relevant chunks from his published corpus, inject as context.
+    # Off by default (RAG_ENABLED). Failures fall through silently — no excerpts
+    # is always safer than a half-baked retrieval breaking the polish call.
+    if settings.rag_enabled:
+        try:
+            from tweetgod.rag import retrieve_context, format_excerpts
+            query = f"{tweet.text}\n\n{raw_text}"
+            chunks = retrieve_context(query)
+            if chunks:
+                excerpts = format_excerpts(chunks)
+                user_prompt += (
+                    f"\n\nRELEVANT EXCERPTS FROM YOUR PUBLISHED WORK:\n\n"
+                    f"{excerpts}"
+                )
+                log.info(
+                    "RAG: injected %d excerpts (top similarity=%.3f)",
+                    len(chunks),
+                    chunks[0].get("similarity", 0.0),
+                )
+            else:
+                log.info("RAG: no relevant chunks found for this candidate")
+        except Exception:
+            log.warning("RAG retrieval failed, polishing without context", exc_info=True)
 
     payload = {
         "model": settings.openrouter_model,
