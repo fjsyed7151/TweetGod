@@ -172,13 +172,17 @@ def ingest_post(post: dict, supabase) -> dict:
     return {"status": "ingested", "chunks": len(chunks), "tokens": total_tokens}
 
 
-def main() -> None:
+def run_ingest() -> dict:
+    """Run a full ingestion cycle. Returns a stats dict.
+
+    Idempotent — posts whose modified timestamp matches the row already in
+    rag_articles are skipped. Safe to call from the scheduled job; raises on
+    config errors instead of sys.exit so the bot scheduler stays alive.
+    """
     if not settings.openai_api_key:
-        log.error("OPENAI_API_KEY not set in .env — aborting")
-        sys.exit(1)
+        raise RuntimeError("OPENAI_API_KEY not set in .env")
     if not settings.supabase_url or not settings.supabase_key:
-        log.error("Supabase env not set — aborting")
-        sys.exit(1)
+        raise RuntimeError("Supabase env not set")
 
     log.info("Embedding model: %s @ 1536 dims", settings.openai_embed_model)
     log.info("Fetching all published posts from %s", WP_BASE)
@@ -228,6 +232,16 @@ def main() -> None:
         stats["chunks"],
         stats["tokens"],
     )
+    return stats
+
+
+def main() -> None:
+    """CLI entrypoint: `python -m tweetgod.ingest`."""
+    try:
+        run_ingest()
+    except RuntimeError as e:
+        log.error(str(e))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

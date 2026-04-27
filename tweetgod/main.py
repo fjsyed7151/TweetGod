@@ -11,6 +11,7 @@ from datetime import datetime
 
 import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 import tweetgod.approval as approval_mod
@@ -382,6 +383,20 @@ def _is_active_hours() -> bool:
 # ── Scheduler ────────────────────────────────────────────────────────────────
 
 
+async def _scheduled_rag_refresh() -> None:
+    """Re-ingest stablebread.com corpus. Runs in a thread to keep the event loop free."""
+    log.info("Starting scheduled RAG corpus refresh")
+    try:
+        from tweetgod.ingest import run_ingest
+        stats = await asyncio.to_thread(run_ingest)
+        log.info(
+            "Scheduled RAG refresh complete: ingested=%d skipped=%d errors=%d",
+            stats["ingested"], stats["skipped"], stats["errors"],
+        )
+    except Exception:
+        log.error("Scheduled RAG refresh failed", exc_info=True)
+
+
 def start_scheduler() -> None:
     """Start the APScheduler with random jitter."""
     scheduler = AsyncIOScheduler(timezone=settings.timezone)
@@ -404,9 +419,24 @@ def start_scheduler() -> None:
         max_instances=1,
     )
 
+    # RAG corpus refresh — Mon + Thu at 8am New York time (handles EST/EDT)
+    scheduler.add_job(
+        _scheduled_rag_refresh,
+        CronTrigger(
+            day_of_week="mon,thu",
+            hour=8,
+            minute=0,
+            timezone=pytz.timezone("America/New_York"),
+        ),
+        id="rag_refresh",
+        name="RAG Corpus Refresh",
+        max_instances=1,
+    )
+
     scheduler.start()
     log.info(
-        "Scheduler started: pipeline every %d-%d min, engagement check every 6h",
+        "Scheduler started: pipeline every %d-%d min, engagement check every 6h, "
+        "RAG refresh Mon+Thu 8am ET",
         settings.schedule_interval_min,
         settings.schedule_interval_max,
     )
