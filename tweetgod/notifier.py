@@ -118,6 +118,17 @@ async def notify_watchlist_tweet(tweet, matched_keywords: list[str]) -> None:
     await send_message(text)
 
 
+def _fmt_hour_12(hour: int) -> str:
+    """Convert a 24-hour int (0-23) to '9 AM' / '9 PM' / '12 AM' / '12 PM' style."""
+    if hour == 0:
+        return "12 AM"
+    if hour == 12:
+        return "12 PM"
+    if hour < 12:
+        return f"{hour} AM"
+    return f"{hour - 12} PM"
+
+
 async def notify_start_of_day() -> None:
     """Telegram heartbeat at the start of the active posting window."""
     from tweetgod.pause import is_paused, format_remaining
@@ -129,7 +140,7 @@ async def notify_start_of_day() -> None:
 
     text = (
         f"☀️ <b>Starting daily run{pause_note}</b>\n"
-        f"Active until {settings.active_hour_end}:00 {tz_label} — "
+        f"Active until {_fmt_hour_12(settings.active_hour_end)} {tz_label} — "
         f"limit {settings.daily_post_limit} posts"
     )
     await send_message(text)
@@ -145,7 +156,7 @@ async def notify_stop_of_day() -> None:
     text = (
         f"\U0001f319 <b>Stopped for the day</b>\n"
         f"Posts: {posts_today}/{settings.daily_post_limit} — "
-        f"resuming at {settings.active_hour_start}:00 {tz_label}"
+        f"resuming at {_fmt_hour_12(settings.active_hour_start)} {tz_label}"
     )
     await send_message(text)
 

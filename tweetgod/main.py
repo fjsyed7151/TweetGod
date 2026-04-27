@@ -460,14 +460,15 @@ def start_scheduler() -> None:
         max_instances=1,
     )
 
+    from tweetgod.notifier import _fmt_hour_12
     scheduler.start()
     log.info(
         "Scheduler started: pipeline every %d-%d min, engagement check every 6h, "
-        "RAG refresh Mon+Thu 8am ET, daily heartbeats at %d:00 + %d:00 %s",
+        "RAG refresh Mon+Thu 8 AM ET, daily heartbeats at %s + %s %s",
         settings.schedule_interval_min,
         settings.schedule_interval_max,
-        settings.active_hour_start,
-        settings.active_hour_end,
+        _fmt_hour_12(settings.active_hour_start),
+        _fmt_hour_12(settings.active_hour_end),
         settings.timezone,
     )
 
