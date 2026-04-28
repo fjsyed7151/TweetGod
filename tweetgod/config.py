@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     # Retry
     max_retries: int = 3
 
+    # ── Relevance / niche filtering ──
+    # Heuristic: trending tweets must have substantive (non-URL/mention/emoji)
+    # length above this floor, in addition to passing topical signal checks.
+    trending_min_substantive_length: int = 50
+    # LLM relevance pass on top-N candidates. Set 0 to disable. Anything scored
+    # strictly below this is dropped before the softmax pick. 5 = "finance-
+    # adjacent w/ substance"; 7+ = "directly on-topic for a value investor".
+    relevance_threshold: int = 5
+    # Skip the LLM relevance pass for priority accounts (you curated them).
+    relevance_skip_priority: bool = True
+
     model_config = {"env_prefix": "", "case_sensitive": False}
 
 

@@ -103,6 +103,70 @@ VOICE: casual, lowercase by default, no em-dashes, no hashtags/@mentions, no emo
 
 Respond with JSON only: {"polished": "the new revised draft"}"""
 
+RELEVANCE_SYSTEM_PROMPT = """You screen tweets for Fajasy, founder of StableBread (stablebread.com), a value-investing education brand. He writes about stock analysis, valuation (DCF, DDM, multiples, comps, NAV), portfolio management, and capital markets. Audience: value investors, retail through professional. He has 150+ articles spanning fundamental analysis, financial statements, ratios, accounting quality, sector deep-dives, and macro context.
+
+Your job: rate whether Fajasy could write a meaningful, on-brand QUOTE TWEET in response to this tweet. Score 0-10 strictly:
+
+10 = directly about a specific stock, valuation, earnings, business model, capital allocation, accounting nuance, or investing thesis. Plenty to react to with a real take.
+8-9 = clearly finance/markets — sector trend, macro print, Fed/rates take, M&A, bond market, credit, well-known investor framework.
+6-7 = finance-adjacent with substance: business strategy, broad market commentary, earnings season vibes.
+4-5 = mentions finance terms but is mostly vague / a brief observation / "market closed red"-tier.
+2-3 = tangentially mentions money or business but is really about something else.
+0-1 = off-topic for value investing entirely (politics, social causes, sports, gossip, generic motivation, crypto pumps, giveaways, "appreciate my guy" promo, justice campaigns, brief cheering observations, spam).
+
+Bias toward LOW scores. If it's a one-liner with nothing meaningful to add to, it's a 4 at best — even if it mentions "stock market". The bar is "could he write something genuinely useful in response, or would the quote tweet be filler?"
+
+Return JSON only: {"score": <integer 0-10>, "reason": "<6-12 word phrase explaining the score>"}"""
+
+
+async def score_relevance(tweet: Tweet) -> tuple[int, str]:
+    """LLM-rate how quote-tweetable this is for Fajasy. Returns (score 0-10, reason).
+
+    Defaults to (5, "scoring failed") on error so failures don't auto-reject —
+    the heuristic prefilter and human approval still gate everything.
+    """
+    user_prompt = (
+        f"Tweet by @{tweet.author_username} ({tweet.author_followers:,} followers):\n"
+        f"\"{tweet.text[:500]}\"\n\n"
+        f"Score this tweet's quote-tweet relevance for Fajasy (StableBread)."
+    )
+
+    headers = {
+        "Authorization": f"Bearer {settings.openrouter_api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://stablebread.com",
+        "X-Title": "TweetGod (StableBread) — relevance",
+    }
+    payload = {
+        "model": settings.openrouter_model,
+        "messages": [
+            {"role": "system", "content": RELEVANCE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 80,
+        "response_format": {"type": "json_object"},
+        "reasoning": {"enabled": False},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+        score_raw = parsed.get("score", 5)
+        try:
+            score = max(0, min(10, int(score_raw)))
+        except (TypeError, ValueError):
+            score = 5
+        reason = str(parsed.get("reason", "")).strip()[:120] or "no reason"
+        return score, reason
+    except Exception:
+        log.warning("Relevance scoring failed for @%s", tweet.author_username, exc_info=True)
+        return 5, "scoring failed"
+
 
 def _build_rag_excerpts(query: str) -> str:
     """Pull relevant chunks from the corpus and format as excerpt block.

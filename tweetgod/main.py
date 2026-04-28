@@ -53,6 +53,7 @@ from tweetgod.pause import (
     get_paused_until,
     format_remaining,
 )
+from tweetgod.llm import score_relevance
 from tweetgod.poster import post_quote_tweet
 from tweetgod.scorer import rank_tweets
 from tweetgod.scraper import scrape_tweets, scrape_watchlist
@@ -103,6 +104,61 @@ async def _scrape_with_retries(keyword: str, search_type: str, max_retries: int 
             await asyncio.sleep(wait)
     log.warning("All %d scrape attempts failed for %s/%s", max_retries, search_type, keyword)
     return []
+
+
+# ── Relevance pass ───────────────────────────────────────────────────────────
+
+
+async def _apply_relevance_filter(ranked: list, search_type: str) -> list:
+    """Score each ranked candidate for niche relevance via LLM, drop low ones,
+    and re-weight survivors by relevance.
+
+    Skips entirely for priority sources (handles are user-curated) or when
+    the threshold is set to 0. Failures default to score=5 so the pass never
+    fails-closed.
+    """
+    if not ranked:
+        return ranked
+    if settings.relevance_threshold <= 0:
+        return ranked
+    if settings.relevance_skip_priority and search_type == "priority":
+        log.debug("Skipping relevance pass for priority source")
+        return ranked
+    if not settings.openrouter_api_key:
+        log.debug("No OpenRouter key; skipping relevance pass")
+        return ranked
+
+    results = await asyncio.gather(
+        *[score_relevance(s.tweet) for s in ranked],
+        return_exceptions=True,
+    )
+
+    survivors: list = []
+    for s, res in zip(ranked, results):
+        if isinstance(res, Exception):
+            rel_score, reason = 5, "exception"
+        else:
+            rel_score, reason = res
+        log.info(
+            "Relevance @%s: %d/10 — %s | composite=%.2f",
+            s.tweet.author_username, rel_score, reason, s.score,
+        )
+        if rel_score < settings.relevance_threshold:
+            continue
+        # Re-weight: relevance is the dominant factor for the softmax pick.
+        # Composite score gets multiplied by (rel_score / 10), so a 10/10 keeps
+        # full score and a 5/10 (the threshold) gets halved before competing.
+        s.replyability_score = float(rel_score)
+        s.score = round(s.score * (rel_score / 10.0), 4)
+        survivors.append(s)
+
+    # Re-sort so softmax sees the relevance-adjusted order.
+    survivors.sort(key=lambda x: x.score, reverse=True)
+    log.info(
+        "Relevance pass: %d/%d candidates survived (threshold=%d)",
+        len(survivors), len(ranked), settings.relevance_threshold,
+    )
+    return survivors
 
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
@@ -204,6 +260,16 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
         top_n=settings.top_n_candidates,
         source_type=search_type,
     )
+
+    # ── Step 5b: LLM relevance pass (the "use its brain" layer) ──
+    # Heuristic prefilter already killed obvious garbage; this catches
+    # subtler off-niche stuff and demotes brief observations that
+    # technically mention finance but have nothing to react to.
+    ranked = await _apply_relevance_filter(ranked, search_type)
+    if not ranked:
+        log.info("All candidates dropped by relevance filter")
+        await notify_no_tweets(keyword, search_type)
+        return None
 
     # ── Step 6: Softmax pick ──
     best = _softmax_pick(ranked)
