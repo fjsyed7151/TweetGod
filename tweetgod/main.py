@@ -42,6 +42,7 @@ from tweetgod.notifier import (
     notify_stop_of_day,
     notify_success,
     notify_watchlist_tweet,
+    notify_weekly_digest,
     send_message,
 )
 from tweetgod.pause import (
@@ -299,6 +300,8 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
         keyword=keyword,
         response_time_seconds=approval.response_time_seconds,
         raw_input=approval.raw_input,
+        relevance_score=best.replyability_score,
+        skip_reason=approval.skip_reason,
     )
 
     if approval.outcome in ("rejected", "timeout"):
@@ -321,7 +324,7 @@ async def run_pipeline(dry_run: bool = False) -> PostedQuote | None:
     posted.keyword_used = keyword
     posted.score = best.score
     posted.source_type = search_type
-    save_quote(posted)
+    save_quote(posted, relevance_score=best.replyability_score)
     await notify_success(posted, keyword, best.score)
 
     log.info("Pipeline complete: quote tweeted @%s (source=%s)",
@@ -501,6 +504,21 @@ def start_scheduler() -> None:
         max_instances=1,
     )
 
+    # Weekly self-improvement digest — Sunday 9:07 AM ET (off-minute on
+    # purpose so we don't share the API hour with every other 9 AM cron).
+    scheduler.add_job(
+        notify_weekly_digest,
+        CronTrigger(
+            day_of_week="sun",
+            hour=9,
+            minute=7,
+            timezone=pytz.timezone("America/New_York"),
+        ),
+        id="weekly_digest",
+        name="Weekly Self-Improvement Digest",
+        max_instances=1,
+    )
+
     # Daily heartbeats: ping Telegram at the start and end of the active window
     bot_tz = pytz.timezone(settings.timezone)
     scheduler.add_job(
@@ -530,7 +548,8 @@ def start_scheduler() -> None:
     scheduler.start()
     log.info(
         "Scheduler started: pipeline every %d-%d min, engagement check every 6h, "
-        "RAG refresh Mon+Thu 8 AM ET, daily heartbeats at %s + %s %s",
+        "RAG refresh Mon+Thu 8 AM ET, weekly digest Sun 9:07 AM ET, "
+        "daily heartbeats at %s + %s %s",
         settings.schedule_interval_min,
         settings.schedule_interval_max,
         _fmt_hour_12(settings.active_hour_start),
@@ -580,9 +599,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # Support: python -m tweetgod.main --dry-run
-    dry_run = "--dry-run" in sys.argv
-    if dry_run:
+    # Support: python -m tweetgod.main [--dry-run | --digest]
+    if "--digest" in sys.argv:
+        # Fire the weekly digest on demand (skips the scheduler — useful
+        # for testing or running it ad-hoc instead of waiting for Sunday).
+        asyncio.run(notify_weekly_digest())
+    elif "--dry-run" in sys.argv:
         asyncio.run(run_pipeline(dry_run=True))
     else:
         main()

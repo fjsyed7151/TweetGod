@@ -33,6 +33,21 @@ class ApprovalResult(BaseModel):
     final_text: str
     raw_input: str = ""
     response_time_seconds: int | None = None
+    # Short code captured from the Telegram skip command. Empty = generic
+    # skip / approved / timeout. See SKIP_REASONS below for the mapping.
+    skip_reason: str = ""
+
+
+# Skip-code → reason-tag mapping. The user can type any of these to log
+# WHY they're skipping a candidate, fueling the weekly digest's pattern
+# detection. Plain "5" = generic skip with no reason.
+SKIP_REASONS: dict[str, str] = {
+    "5a": "off_topic",     # wrong niche entirely
+    "5b": "too_brief",     # finance-adjacent but no substance to react to
+    "5c": "wrong_angle",   # on-topic but nothing to add / wrong stance
+    "5d": "promo",         # community shoutouts, giveaways, cause campaigns
+    "3":  "bad",           # generic "this one's bad" without a category
+}
 
 
 def _format_followers(n: int) -> str:
@@ -60,16 +75,18 @@ def _build_tweet_message(
     likes = candidate.tweet.likes
     rts = candidate.tweet.retweets
     age = candidate.tweet.age_hours
+    rel = candidate.replyability_score
 
     username = candidate.tweet.author_username
+    rel_str = f" | Rel: {rel:.0f}/10" if rel > 0 else ""
     return (
         f"\U0001f4ac <b>Quote Tweet Opportunity</b>\n\n"
         f"From: https://x.com/{username} ({followers} followers)\n"
         f"\"{tweet_text}\"\n"
         f"Likes: {likes:,} | RTs: {rts:,} | {age:.1f}h ago\n"
-        f"Score: {score:.2f} | Source: {search_type}\n"
+        f"Score: {score:.2f}{rel_str} | Source: {search_type}\n"
         f"\U0001f517 {tweet_link}\n\n"
-        f"What's your take? (type your thoughts, or 5 to skip)"
+        f"What's your take? (type, or 5=skip / 5a=off-topic / 5b=too brief / 5c=wrong angle / 5d=promo / 3=bad)"
     )
 
 
@@ -78,7 +95,7 @@ def _build_polished_message(polished_text: str) -> str:
     return (
         f"\U0001f4dd <b>Polished version:</b>\n\n"
         f"\"{polished_text}\"\n\n"
-        f"1 to post | type feedback for another pass | 5 to skip"
+        f"1=post | feedback for another pass | 5=skip / 5a/5b/5c/5d / 3=bad"
     )
 
 
@@ -118,10 +135,23 @@ async def _get_updates(offset: int | None = None) -> list[dict]:
         return []
 
 
-def _is_skip(text: str) -> bool:
-    """Check if the user wants to skip."""
+def _parse_skip(text: str) -> tuple[bool, str]:
+    """Check if the user wants to skip, returning (is_skip, reason_tag).
+
+    Reason tag is "" for plain skip, otherwise one of the values in
+    SKIP_REASONS (off_topic, too_brief, wrong_angle, promo, bad).
+    """
     normalized = text.strip().lower()
-    return normalized in ("no", "reject", "skip", "n", "\u274c", "nah", "pass", "0", "5")
+    if normalized in SKIP_REASONS:
+        return True, SKIP_REASONS[normalized]
+    if normalized in ("no", "reject", "skip", "n", "\u274c", "nah", "pass", "0", "5"):
+        return True, ""
+    return False, ""
+
+
+def _is_skip(text: str) -> bool:
+    """Back-compat shim \u2014 call _parse_skip when you also need the reason."""
+    return _parse_skip(text)[0]
 
 
 def _is_approve(text: str) -> bool:
@@ -236,11 +266,13 @@ async def request_approval(
                 response_time_seconds=int(time.monotonic() - start_time),
             )
 
-        if _is_skip(text):
-            log.info("Tweet skipped by user")
+        is_skip, skip_reason = _parse_skip(text)
+        if is_skip:
+            log.info("Tweet skipped by user (reason=%r)", skip_reason or "generic")
             return ApprovalResult(
                 outcome="rejected",
                 final_text="",
+                skip_reason=skip_reason,
                 response_time_seconds=int(time.monotonic() - start_time),
             )
 
@@ -278,12 +310,14 @@ async def request_approval(
                     response_time_seconds=int(time.monotonic() - start_time),
                 )
 
-            if _is_skip(text):
-                log.info("Skipped after seeing polished version")
+            is_skip, skip_reason = _parse_skip(text)
+            if is_skip:
+                log.info("Skipped after seeing polished version (reason=%r)", skip_reason or "generic")
                 return ApprovalResult(
                     outcome="rejected",
                     final_text="",
                     raw_input=raw_input,
+                    skip_reason=skip_reason,
                     response_time_seconds=int(time.monotonic() - start_time),
                 )
 

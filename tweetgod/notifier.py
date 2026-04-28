@@ -170,3 +170,31 @@ async def notify_daily_summary(posts_today: int, total_score: float) -> None:
         f"Avg score: {total_score / max(posts_today, 1):.2f}"
     )
     await send_message(text)
+
+
+async def notify_weekly_digest(days: int = 7) -> None:
+    """Build the self-improvement digest and post it to Telegram.
+
+    Telegram's sendMessage max body is 4096 chars; the digest stays well
+    under that even with hundreds of reviews thanks to the top-N trims
+    inside build_weekly_digest.
+    """
+    import asyncio
+    from tweetgod.digest import build_weekly_digest
+    try:
+        # Supabase queries are synchronous — push to a worker thread so we
+        # don't block the asyncio scheduler loop while assembling the digest.
+        text = await asyncio.to_thread(build_weekly_digest, days)
+    except Exception:
+        log.error("Weekly digest assembly failed", exc_info=True)
+        await send_message(
+            f"⚠️ <b>Weekly digest failed</b>\n"
+            f"Couldn't assemble the {days}d summary. Check Sentry for the trace."
+        )
+        return
+
+    if not text:
+        log.info("Weekly digest empty — nothing to send")
+        return
+
+    await send_message(text)

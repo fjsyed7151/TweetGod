@@ -134,7 +134,7 @@ def get_today_replied_authors() -> set[str]:
 # ── Save quote ───────────────────────────────────────────────────────────────
 
 
-def save_quote(quote: PostedQuote) -> None:
+def save_quote(quote: PostedQuote, relevance_score: float = 0.0) -> None:
     """Insert a posted quote tweet into Supabase."""
     client = _get_client()
     client.table("replied_tweets").insert(
@@ -149,9 +149,11 @@ def save_quote(quote: PostedQuote) -> None:
             "posted_at": quote.posted_at.isoformat(),
             "source_type": quote.source_type,
             "post_type": "quote_tweet",
+            "relevance_score": relevance_score,
         }
     ).execute()
-    log.info("Saved quote tweet for tweet %s (source=%s)", quote.tweet_id, quote.source_type)
+    log.info("Saved quote tweet for tweet %s (source=%s, rel=%.1f)",
+             quote.tweet_id, quote.source_type, relevance_score)
 
 
 # ── Review logging ───────────────────────────────────────────────────────────
@@ -167,6 +169,8 @@ def save_review(
     keyword: str,
     response_time_seconds: int | None,
     raw_input: str = "",
+    relevance_score: float = 0.0,
+    skip_reason: str = "",
 ) -> None:
     """Insert a review decision into the reply_reviews table."""
     client = _get_client()
@@ -184,9 +188,14 @@ def save_review(
             "keyword": keyword,
             "response_time_seconds": response_time_seconds,
             "raw_input": raw_input,
+            "relevance_score": relevance_score,
+            "skip_reason": skip_reason,
         }
     ).execute()
-    log.info("Saved review for tweet %s (outcome=%s)", tweet.tweet_id, outcome)
+    log.info(
+        "Saved review for tweet %s (outcome=%s, rel=%.1f, skip_reason=%r)",
+        tweet.tweet_id, outcome, relevance_score, skip_reason or "-",
+    )
 
 
 # ── Keyword stats ────────────────────────────────────────────────────────────
