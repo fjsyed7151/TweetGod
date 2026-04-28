@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from tweetgod.config import settings
 from tweetgod.models import ScoredTweet
-from tweetgod.llm import polish_quote_tweet
+from tweetgod.llm import polish_quote_tweet, iterate_quote_tweet
 from tweetgod.pause import parse_pause_command, pause_for, pause_until_tomorrow, resume
 
 log = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def _build_polished_message(polished_text: str) -> str:
     return (
         f"\U0001f4dd <b>Polished version:</b>\n\n"
         f"\"{polished_text}\"\n\n"
-        f"1 to post | type edits for another pass | 5 to skip"
+        f"1 to post | type feedback for another pass | 5 to skip"
     )
 
 
@@ -245,15 +245,17 @@ async def request_approval(
             )
 
         raw_input = text
-        current_text = text
 
-        # Step 3: Polish via LLM
-        polished = await polish_quote_tweet(current_text, candidate.tweet)
+        # Step 3: First-pass polish from raw take.
+        polished = await polish_quote_tweet(raw_input, candidate.tweet)
         if polished is None:
-            # LLM failed, use raw text as-is
-            polished = current_text[:280]
+            polished = raw_input[:280]
 
-        # Step 4: Present polished version and iterate
+        # Step 4: Present polished version and iterate.
+        # Every subsequent non-control message is treated as FEEDBACK on the
+        # current draft, never as new content to re-polish from scratch. This
+        # prevents the LLM from echoing feedback verbatim ("don't repeat what
+        # tweet said. feedback: try again").
         while True:
             await _send_message(_build_polished_message(polished))
 
@@ -294,23 +296,17 @@ async def request_approval(
                     response_time_seconds=int(time.monotonic() - start_time),
                 )
 
-            # User typed something else, could be a direct replacement or feedback
-            # If it's short and clean (looks like final text), use it directly
-            # If it's longer feedback/direction, send back to LLM
-            if len(text) <= 280 and not any(w in text.lower() for w in ["make it", "change", "more", "less", "try", "instead"]):
-                # Looks like a direct replacement — polish it lightly
-                polished = await polish_quote_tweet(text, candidate.tweet)
-                if polished is None:
-                    polished = text[:280]
-                raw_input = text
-            else:
-                # Looks like feedback — send back to LLM with context
-                feedback_prompt = f"{current_text}\n\nFeedback: {text}"
-                polished = await polish_quote_tweet(feedback_prompt, candidate.tweet)
-                if polished is None:
-                    polished = current_text[:280]
-
-            current_text = text
+            # Anything else = feedback on the current draft. Apply it via the
+            # iterate prompt (which knows about raw take + previous draft +
+            # feedback as separate fields and is told NOT to echo feedback).
+            new_draft = await iterate_quote_tweet(
+                raw_take=raw_input,
+                previous_draft=polished,
+                feedback=text,
+                tweet=candidate.tweet,
+            )
+            if new_draft and new_draft.strip():
+                polished = new_draft
 
     finally:
         approval_active = False

@@ -2,11 +2,14 @@
 
 Replaces the previous direct Twitter API integration. Uses Typefully's
 draft+publish flow with `publish_at: "now"` to post immediately, and
-`x.settings.quote_post_url` to attach the original tweet as a quote.
+`platforms.x.posts[0].quote_post_url` to attach the original tweet as a
+quote. (quote_post_url lives on the POST, not under x.settings — putting
+it under settings yields a 422 VALIDATION_ERROR.)
 
 Notes on `quote_tweet_id` semantics in PostedQuote:
-- On a fully successful publish where Typefully returns the X URL, we store
-  the X status ID (digits only) so engagement_tracker can match cleanly.
+- On a fully successful publish where Typefully returns `x_published_url`,
+  we store the X status ID (digits only) so engagement_tracker can match
+  cleanly.
 - If Typefully publishes asynchronously and the X URL isn't in the response
   yet, we store the Typefully draft id prefixed with "tf:" — engagement_tracker
   resolves the real X URL later via GET /v2/drafts/{id}.
@@ -118,12 +121,21 @@ def post_quote_tweet(text: str, quoted_tweet_url: str) -> PostedQuote | None:
     if not social_set_id:
         return None
 
+    # Per Typefully v2 schema (verified empirically 2026-04):
+    # - `enabled: True` is required on platforms.x
+    # - `quote_post_url` lives on the POST, not under x.settings
+    # - Other platforms (linkedin/bluesky/etc) default to enabled:false when
+    #   omitted, so we don't need to explicitly disable them.
     payload = {
         "platforms": {
             "x": {
                 "enabled": True,
-                "posts": [{"text": text}],
-                "settings": {"quote_post_url": quoted_tweet_url},
+                "posts": [
+                    {
+                        "text": text,
+                        "quote_post_url": quoted_tweet_url,
+                    }
+                ],
             }
         },
         "publish_at": "now",
@@ -149,10 +161,12 @@ def post_quote_tweet(text: str, quoted_tweet_url: str) -> PostedQuote | None:
         log.error("Typefully publish failed", exc_info=True)
         return None
 
-    # Try to extract the published X URL/ID from the response. Field names vary
-    # ("published_url", "url", "x_url", or nested under platforms.x.posts[0]).
+    # Per Typefully v2 draft response, the published X URL appears at
+    # top-level `x_published_url` once X publishing completes. Older field
+    # names are kept as fallbacks for resilience.
     published_url = (
-        data.get("published_url")
+        data.get("x_published_url")
+        or data.get("published_url")
         or data.get("url")
         or data.get("x_url")
         or _maybe_url_from_platforms(data)

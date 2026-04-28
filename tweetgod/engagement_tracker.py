@@ -62,7 +62,8 @@ def _resolve_draft(draft_id: str) -> str | None:
         return None
 
     url = (
-        data.get("published_url")
+        data.get("x_published_url")
+        or data.get("published_url")
         or data.get("url")
         or _url_from_platforms(data)
     )

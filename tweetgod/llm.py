@@ -31,48 +31,111 @@ BANNED_WORDS = [
 
 POLISH_SYSTEM_PROMPT = """You are cleaning up Fajasy's raw thoughts into a quote tweet. Fajasy is the founder of StableBread (stablebread.com), a value-investing education brand. Background: studied finance, then equity research, VC, startups, and consulting. Writes about stock analysis, stock valuation (DCF, DDM, multiples, comps), and portfolio management. 150+ articles, 500k+ words, cited by Investopedia, Goldman Sachs, OECD, Morningstar, KPMG, Chicago Booth. Audience is value investors from retail to professional, so finance lingo is welcome and expected.
 
-Your job:
-- Preserve his exact voice, ideas, and wording
-- Only fix obvious typos and remove filler words
-- Tighten phrasing slightly if needed
-- Do NOT add ideas, change his stance, or make it sound more polished/corporate
-- If it's already good, return it nearly unchanged
+YOUR JOB IS PRESERVATION, NOT REWRITING.
+- Preserve his exact voice, ideas, and wording.
+- Only fix obvious typos and remove filler words.
+- Tighten phrasing slightly if a word is clearly junk.
+- If the raw take is already 280 chars or under and reads cleanly, return it essentially as-is.
+- Length should match the raw take's length. Short take = short polished. Don't pad.
 
-Voice rules (these are the user's actual style — match them, don't fight them):
+ABSOLUTE BANS — if you violate any of these, you have failed:
+- Do NOT echo, paraphrase, restate, or "build on" the original tweet being quoted. The quote tweet's whole job is to add HIS commentary, not summarize what's already visible right above it. If raw is "lol agreed", polished is "lol agreed" — NOT a recap of the original tweet.
+- Do NOT add new ideas, claims, numbers, predictions, opinions, or reasoning he didn't write. If he wrote one sentence, you return one sentence's worth of his content. No expansion.
+- Do NOT add contractions ("u", "ye", "id", "idk") if the raw take didn't already use them. If he wrote "you", keep "you". If he wrote "I would", keep "I would". Match what he typed.
+- Do NOT add a link unless he explicitly asked for one OR his raw take is clearly pointing readers to deeper content. Default is no link. (See LINKING POLICY below.)
+- Do NOT add disclaimers, hedges, or "this is not advice" type wrappers.
+
+VOICE RULES (these describe HIS natural style — match what's already there, don't impose them):
 - Tone: casual, like texting a friend who also invests. Sharp but not stiff.
-- Lowercase by default. Only capitalize proper nouns and finance acronyms (DCF, FCF, ROIC, WACC, EBITDA, P/E, EV, Fed, SEC, etc.). When in doubt, lowercase.
+- Lowercase by default. Only capitalize proper nouns and finance acronyms (DCF, FCF, ROIC, WACC, EBITDA, P/E, EV, Fed, SEC, etc.). If he typed mid-sentence capitals on regular words, lowercase them.
 - Sentences are usually short and direct.
-- Use these contractions/shorthand if the raw input already does (don't add them where he didn't): "ye" (not "yea"/"yeah"), "u" (not "you"), "id" (not "I'd"/"I would"), "idk".
 - Do NOT end a single-sentence tweet with a period. Multi-sentence tweets get normal punctuation.
-- Almost never use emojis.
+- Almost never use emojis. If raw has none, polished has none.
 - No hashtags, no @mentions.
 - Do NOT use em-dashes (— or –) or en-dashes.
-- For publicly-traded companies you're confident about, use the ticker prefixed with $ (e.g. $TSLA, $AAPL, $MSFT). Prefer tickers over spelling out company names. Never put any character immediately to the left of $ — write "$TSLA" or " $TSLA", never "($TSLA)" or "/$TSLA". Only use $ if you're sure of the ticker.
+- For publicly-traded companies, use the ticker prefixed with $ (e.g. $TSLA, $AAPL, $MSFT) when you're sure of the ticker. Never put any character immediately to the left of $ — write "$TSLA" or " $TSLA", never "($TSLA)" or "/$TSLA".
 - Avoid corporate/AI words like: delve, utilize, leverage, robust, pivotal, crucial, comprehensive, vital, notably, furthermore, moreover, additionally, indeed, showcasing, aligns, noteworthy, landscape, game-changer, navigate, realm, foster, streamline, innovative, cutting-edge, transformative, seamless, elevate, unlock, harness, empower, groundbreaking, revolutionary, synergy.
 
-When the user prompt includes a "RELEVANT EXCERPTS FROM YOUR PUBLISHED WORK" section, treat those excerpts as factual sources you can draw on:
-- Use them for specifics (numbers, definitions, frameworks, mechanics) to make the polished tweet sharper and more accurate. Don't fabricate details that aren't in the excerpts or the raw take.
-- Do not cite or reference the excerpts as sources in the tweet body — just use the knowledge naturally.
+RAG EXCERPTS (when present): the user prompt may include a "RELEVANT EXCERPTS FROM YOUR PUBLISHED WORK" section.
+- Use those ONLY to verify a number/term/spelling he already mentioned, or to pick the right ticker.
+- Do NOT use them to add new content, sentences, or claims he didn't write.
+- Do NOT cite or reference them in the tweet body.
 
-LINKING POLICY (be conservative — most tweets should NOT include a link):
-- Only include a URL when one of the retrieved excerpts directly extends the SAME topic the tweet is making, AND a curious reader would genuinely get value from clicking through. If the connection is loose or the tweet stands on its own, no link.
+LINKING POLICY (default = NO LINK):
+- Only include a URL when (a) the raw take itself signals a link (e.g., "wrote about this", "deeper dive here", "more on this"), OR (b) one of the RAG excerpts is a near-perfect match for the SAME niche topic the take is making AND a curious reader would clearly benefit from clicking through. If the connection is loose or the tweet stands on its own, NO link.
 - Maximum ONE URL per tweet, ever.
-- When you do link, use Fajasy's natural phrasing in his casual lowercase voice. Examples (don't copy verbatim, vary it):
+- When you do add a link, use his natural casual phrasing. Examples (vary them, don't copy verbatim):
     "i wrote about it here if interested: <url>"
     "got a deeper write-up here: <url>"
     "more on this here: <url>"
     "deeper dive here if u want: <url>"
-- Do NOT use stiff/promotional phrasing like "Check out my article", "Read my comprehensive guide", "I authored", "in my piece on X". Keep it casual and brief.
-- Use the bare URL — Telegram and X auto-link them.
-- Default is no link. Only add one if it clearly earns its place in the 280 chars.
+- Do NOT use stiff/promotional phrasing like "Check out my article", "Read my comprehensive guide", "I authored", "in my piece on X".
+- Use the bare URL — X auto-links it.
 
 Respond with JSON only: {"polished": "the cleaned up text"}"""
 
+ITERATE_SYSTEM_PROMPT = """You are revising a draft quote tweet for Fajasy based on his feedback. Fajasy is the founder of StableBread, a value-investing education brand. Audience is value investors. Finance lingo is welcome and expected.
 
-async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
-    """Polish Fajasy's raw input into a quote tweet.
+YOU ARE REVISING. NOT POLISHING FROM SCRATCH. NOT ECHOING FEEDBACK.
 
-    Returns the polished text string, or None on failure.
+The user prompt will give you:
+- ORIGINAL TWEET — the tweet being quoted (for context only, do NOT echo or paraphrase it).
+- RAW TAKE — Fajasy's original raw thought (his actual idea/stance — preserve this).
+- PREVIOUS DRAFT — the polished version you previously produced.
+- FEEDBACK — what Fajasy wants changed.
+
+Your job:
+- Apply the feedback to PREVIOUS DRAFT to produce a NEW polished draft.
+- The output is the new draft only — never quote, restate, or include the feedback text itself.
+- Preserve Fajasy's stance and ideas from RAW TAKE. Don't change his opinion to suit the feedback unless the feedback explicitly says so.
+- If feedback is vague ("try again", "do it different", "no"), produce a meaningfully different rewrite of PREVIOUS DRAFT — different phrasing, different angle, same underlying take. Do NOT just resubmit the previous draft and do NOT include the feedback text.
+- If feedback is specific ("make it shorter", "drop the link", "use $SNAP not Snap", "less hedging"), apply it precisely.
+- Output length should be similar to PREVIOUS DRAFT unless feedback explicitly asks for shorter/longer.
+
+ABSOLUTE BANS (same as polish):
+- Do NOT echo or paraphrase the original tweet being quoted.
+- Do NOT include the FEEDBACK text in the output. Ever.
+- Do NOT add new ideas, claims, or numbers Fajasy didn't write.
+- Do NOT add contractions ("u", "ye", "id", "idk") if RAW TAKE didn't use them.
+- Do NOT add a link unless RAW TAKE asked for one or PREVIOUS DRAFT had one and feedback didn't say to drop it.
+
+VOICE: casual, lowercase by default, no em-dashes, no hashtags/@mentions, no emojis (unless raw had them), no period on single-sentence tweets, $TICKER format for stocks, no corporate AI words (delve, utilize, leverage, robust, pivotal, comprehensive, etc.).
+
+Respond with JSON only: {"polished": "the new revised draft"}"""
+
+
+def _build_rag_excerpts(query: str) -> str:
+    """Pull relevant chunks from the corpus and format as excerpt block.
+
+    Returns "" if RAG disabled, no hits, or any failure. Never raises.
+    """
+    if not settings.rag_enabled:
+        return ""
+    try:
+        from tweetgod.rag import retrieve_context, format_excerpts
+        chunks = retrieve_context(query)
+        if not chunks:
+            log.info("RAG: no relevant chunks found for this candidate")
+            return ""
+        log.info(
+            "RAG: injected %d excerpts (top similarity=%.3f)",
+            len(chunks),
+            chunks[0].get("similarity", 0.0),
+        )
+        return (
+            "\n\nRELEVANT EXCERPTS FROM YOUR PUBLISHED WORK:\n\n"
+            + format_excerpts(chunks)
+        )
+    except Exception:
+        log.warning("RAG retrieval failed, continuing without context", exc_info=True)
+        return ""
+
+
+async def _call_openrouter(system_prompt: str, user_prompt: str) -> str | None:
+    """Call OpenRouter, parse the JSON response, return the polished string.
+
+    Centralizes the HTTP call, banned-word check, em-dash strip, and length
+    bounds so polish + iterate behave identically.
     """
     headers = {
         "Authorization": f"Bearer {settings.openrouter_api_key}",
@@ -81,41 +144,10 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
         "HTTP-Referer": "https://stablebread.com",
         "X-Title": "TweetGod (StableBread)",
     }
-
-    user_prompt = (
-        f"Clean up this raw take for a quote tweet (max 280 chars).\n\n"
-        f"Original tweet by @{tweet.author_username}: \"{tweet.text[:300]}\"\n\n"
-        f"Fajasy's raw take: \"{raw_text}\""
-    )
-
-    # RAG: pull relevant chunks from his published corpus, inject as context.
-    # Off by default (RAG_ENABLED). Failures fall through silently — no excerpts
-    # is always safer than a half-baked retrieval breaking the polish call.
-    if settings.rag_enabled:
-        try:
-            from tweetgod.rag import retrieve_context, format_excerpts
-            query = f"{tweet.text}\n\n{raw_text}"
-            chunks = retrieve_context(query)
-            if chunks:
-                excerpts = format_excerpts(chunks)
-                user_prompt += (
-                    f"\n\nRELEVANT EXCERPTS FROM YOUR PUBLISHED WORK:\n\n"
-                    f"{excerpts}"
-                )
-                log.info(
-                    "RAG: injected %d excerpts (top similarity=%.3f)",
-                    len(chunks),
-                    chunks[0].get("similarity", 0.0),
-                )
-            else:
-                log.info("RAG: no relevant chunks found for this candidate")
-        except Exception:
-            log.warning("RAG retrieval failed, polishing without context", exc_info=True)
-
     payload = {
         "model": settings.openrouter_model,
         "messages": [
-            {"role": "system", "content": POLISH_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.4,
@@ -147,8 +179,8 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
         lower = polished.lower()
         for word in BANNED_WORDS:
             if word in lower:
-                log.warning("Polished text contains banned word '%s', returning raw input", word)
-                return raw_text[:280]
+                log.warning("Polished text contains banned word '%s'", word)
+                return None
 
         # Enforce 280 char limit
         if len(polished) > settings.max_quote_length:
@@ -162,5 +194,65 @@ async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
         return polished
 
     except Exception:
-        log.error("LLM polish failed", exc_info=True)
+        log.error("LLM call failed", exc_info=True)
         return None
+
+
+async def polish_quote_tweet(raw_text: str, tweet: Tweet) -> str | None:
+    """Polish Fajasy's raw input into a quote tweet.
+
+    Returns the polished text string, or None on failure.
+    """
+    user_prompt = (
+        f"Clean up this raw take for a quote tweet (max 280 chars).\n\n"
+        f"ORIGINAL TWEET (for context only — do NOT echo, paraphrase, or summarize this) by @{tweet.author_username}:\n"
+        f"\"{tweet.text[:300]}\"\n\n"
+        f"FAJASY'S RAW TAKE (preserve this — clean up only):\n"
+        f"\"{raw_text}\""
+    )
+    user_prompt += _build_rag_excerpts(f"{tweet.text}\n\n{raw_text}")
+
+    polished = await _call_openrouter(POLISH_SYSTEM_PROMPT, user_prompt)
+    if polished is None:
+        # Last-resort: return the raw text trimmed to 280, so the user still
+        # has *something* to approve/edit rather than a hard fail.
+        return raw_text[:settings.max_quote_length] if raw_text.strip() else None
+    return polished
+
+
+async def iterate_quote_tweet(
+    raw_take: str,
+    previous_draft: str,
+    feedback: str,
+    tweet: Tweet,
+) -> str | None:
+    """Revise an existing draft based on user feedback.
+
+    Sends the LLM the original tweet, the raw take, the previous draft, AND
+    the feedback as four separate fields — so the model knows to apply the
+    feedback rather than treat it as new content to polish.
+
+    Returns the new draft, or None on failure.
+    """
+    user_prompt = (
+        f"Revise the previous draft based on Fajasy's feedback. Output ONLY "
+        f"the new draft (max 280 chars). Do NOT include the feedback text in "
+        f"your output.\n\n"
+        f"ORIGINAL TWEET (context only — do NOT echo or paraphrase) by @{tweet.author_username}:\n"
+        f"\"{tweet.text[:300]}\"\n\n"
+        f"RAW TAKE (Fajasy's underlying idea — preserve his stance):\n"
+        f"\"{raw_take}\"\n\n"
+        f"PREVIOUS DRAFT (what you wrote last time):\n"
+        f"\"{previous_draft}\"\n\n"
+        f"FEEDBACK (what Fajasy wants changed):\n"
+        f"\"{feedback}\""
+    )
+    user_prompt += _build_rag_excerpts(f"{tweet.text}\n\n{raw_take}\n\n{feedback}")
+
+    new_draft = await _call_openrouter(ITERATE_SYSTEM_PROMPT, user_prompt)
+    if new_draft is None:
+        # Don't fall back to anything containing the feedback — better to return
+        # the previous draft unchanged than to leak feedback into the tweet.
+        log.warning("Iteration failed, returning previous draft unchanged")
+        return previous_draft
+    return new_draft
